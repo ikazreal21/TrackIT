@@ -1,5 +1,5 @@
 services:
-  server:
+  stat_tracker_server:
     build: .
     ports:
       - "4031:4031"
