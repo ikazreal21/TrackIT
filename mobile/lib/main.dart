@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'screens/home_screen.dart';
+import 'services/background_sync_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await BackgroundSyncService.initialize();
   runApp(const TrackITApp());
 }
 

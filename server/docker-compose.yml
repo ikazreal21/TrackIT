@@ -2,7 +2,7 @@ services:
   server:
     build: .
     ports:
-      - "8000:8000"
+      - "4029:4029"
     volumes:
       - ./stats.db:/app/stats.db
     restart: unless-stopped

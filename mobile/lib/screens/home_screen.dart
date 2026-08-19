@@ -32,23 +32,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _checkSupport() async {
-    final supported = await _health.isSupported;
+    final (supported, status) = await _health.isSupported;
     setState(() {
       _status = supported
-          ? 'Health Connect supported. Grant permission to begin.'
-          : 'Health Connect is not available on this device.';
+          ? 'Health Connect supported ($status). Grant permission to begin.'
+          : 'Health Connect not available: $status';
     });
   }
 
   Future<void> _grant() async {
     setState(() => _loading = true);
-    final granted = await _health.requestAuthorization();
+    final (granted, message) = await _health.requestAuthorization();
     setState(() {
       _loading = false;
       _authorized = granted;
       _status = granted
           ? 'Access granted. Tap "Fetch stats".'
-          : 'Access denied or not supported.';
+          : 'Access denied or not supported: $message';
     });
   }
 
@@ -167,7 +167,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: 'Distance (m)',
                       icon: Icons.map,
                       accent: Colors.blue,
-                      value: _summary('DISTANCE_WALKING_RUNNING'),
+                      value: _summary('DISTANCE_DELTA'),
                     ),
                     StatCard(
                       title: 'Calories (kcal)',
