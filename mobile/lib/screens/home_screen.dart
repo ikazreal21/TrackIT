@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/health_data.dart';
 import '../services/api_service.dart';
 import '../services/health_connect_service.dart';
+import '../services/local_storage_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/stat_card.dart';
 import 'settings_screen.dart';
@@ -19,6 +20,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _health = HealthConnectService();
   final _settings = SettingsService();
+  final _localStorage = LocalStorageService();
 
   List<HealthRecord> _records = [];
   bool _loading = false;
@@ -28,15 +30,31 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _checkSupport();
+    _initialize();
   }
 
-  Future<void> _checkSupport() async {
+  Future<void> _initialize() async {
+    setState(() => _loading = true);
+
     final (supported, status) = await _health.isSupported;
+    if (!supported) {
+      setState(() {
+        _loading = false;
+        _status = 'Health Connect not available: $status';
+      });
+      return;
+    }
+
+    final localRecords = await _localStorage.loadRecords();
+    final hasPermissions = await _health.hasPermissions();
+
     setState(() {
-      _status = supported
-          ? 'Health Connect supported ($status). Grant permission to begin.'
-          : 'Health Connect not available: $status';
+      _records = localRecords;
+      _authorized = hasPermissions;
+      _loading = false;
+      _status = hasPermissions
+          ? 'Loaded ${localRecords.length} records. Tap "Fetch stats" to update.'
+          : 'Health Connect supported ($status). Grant permission to begin.';
     });
   }
 
@@ -55,11 +73,29 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _fetch() async {
     setState(() => _loading = true);
     final days = await _settings.daysToFetch;
-    final records = await _health.fetchLastNDays(days);
+    final newRecords = await _health.fetchLastNDays(days);
+
+    final merged = [..._records];
+    final existingKeys = _records
+        .map((r) => '${r.type}|${r.dateFrom.toUtc().toIso8601String()}|${r.dateTo.toUtc().toIso8601String()}')
+        .toSet();
+
+    var added = 0;
+    for (final r in newRecords) {
+      final key = '${r.type}|${r.dateFrom.toUtc().toIso8601String()}|${r.dateTo.toUtc().toIso8601String()}';
+      if (!existingKeys.contains(key)) {
+        merged.add(r);
+        existingKeys.add(key);
+        added++;
+      }
+    }
+
+    await _localStorage.saveRecords(newRecords);
+
     setState(() {
-      _records = records;
+      _records = merged;
       _loading = false;
-      _status = 'Fetched ${records.length} data points for last $days days.';
+      _status = 'Fetched ${newRecords.length} records. $added new data points added for last $days days.';
     });
   }
 
@@ -189,6 +225,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         prefix: '',
                         altTypes: ['SLEEP_ASLEEP', 'SLEEP_LIGHT', 'SLEEP_DEEP', 'SLEEP_REM'],
                       ),
+                    ),
+                    StatCard(
+                      title: 'Heart Rate',
+                      icon: Icons.favorite,
+                      accent: Colors.red,
+                      value: _summary('HEART_RATE'),
                     ),
                   ],
                 ),

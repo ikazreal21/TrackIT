@@ -1,170 +1,234 @@
 # TrackIT
 
-A personal health analytics pipeline. A **Flutter** mobile app reads stats from
-**Health Connect** (the data that your third-party watch writes to the Google
-Fit / Health Connect app) and posts them to a local **FastAPI + SQLite** server
-for you to store and analyze.
+TrackIT is a personal health-data tracker. The Flutter Android app reads data
+from Health Connect, stores a local copy on the phone, and uploads records to a
+FastAPI + SQLite server that you control.
 
-```
- Wearable watch
-      │  (syncs automatically)
- Google Fit / Health Connect app  ── Android OS
-      │                                   │
-      └── Health Connect API ────────────┐│
-                                         ▼
-                              Flutter app (TrackIT)
-                                         │  POST /api/records/batch
-                                         ▼
-                          FastAPI server + SQLite (local, LAN)
-                                         │  analysis endpoints
-                                         ▼
-                                   charts / SQL / notebooks
+```text
+Wearable/watch -> Health Connect -> TrackIT Android app
+                                      |
+                                      v
+                              FastAPI + SQLite server
 ```
 
 ## Features
 
-- **Dark/Light mode** — toggle in app bar
-- Reads health data from Health Connect (steps, heart rate, distance, calories, sleep, weight, height)
-- Uploads data to local FastAPI server for storage and analysis
-- Configurable day range for fetching data
-- Server-side deduplication
+- Reads steps, distance, heart rate, calories, sleep, weight, and height from Health Connect.
+- Persists fetched records locally on the phone using SQLite.
+- Restores previously fetched data when the app starts.
+- Checks Health Connect permissions automatically on startup.
+- Merges newly fetched records without local duplicates.
+- Uploads records to a local server with server-side deduplication.
+- Configurable fetch range from 1 to 365 days.
+- Optional weekly background sync using Android WorkManager.
+- Light/dark mode toggle.
+- Blue TrackIT launcher icon.
+- FastAPI web dashboard and interactive API documentation.
 
----
+## Repository Layout
 
-## Why Health Connect and not Google Fit REST?
-
-Google is deprecating the Google Fit REST API in favor of **Health Connect**.
-Health Connect is where wearable data (steps, heart rate, sleep, weight, etc.)
-now lives, so reading from it is the future-proof path and works without a
-Google Cloud OAuth project.
-
----
-
-## Repository layout
-
-```
-mobile/   Flutter app (reads Health Connect, pushes to server)
-server/   Python FastAPI + SQLite server (storage & analysis)
+```text
+mobile/   Flutter Android app
+server/   FastAPI + SQLite server
 ```
 
----
+## Server With Docker
 
-## Part 1 — Run the FastAPI server
+The Docker server listens on port `4031`. Its SQLite database is stored in the
+Linux host directory `server/data/`.
 
 ```bash
 cd server
-python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
+docker compose up -d --build
 ```
 
-- Open `http://localhost:8000/docs` for interactive API docs.
-- Endpoints:
-  - `GET /health` — heartbeat
-  - `POST /api/records/batch` — receive records from the app
-  - `GET /api/records` — list stored records
-  - `GET /api/summary` — totals/avg/min/max, grouped
-  - `GET /api/summary/daily` — day-by-day totals for trend charts
+Useful URLs on the host machine:
 
-Data is stored in `server/stats.db` (SQLite) — query it directly or import `database.py` for analysis.
+```text
+Dashboard: http://localhost:4031/
+API docs:  http://localhost:4031/docs
+Health:    http://localhost:4031/health
+```
 
-> Make sure your phone and computer are on the **same Wi-Fi network**, and let
-> the app reach your PC's LAN IP (e.g. `http://192.168.1.50:8000`), not
-> `localhost`.
+From another device on the same LAN, replace `localhost` with the server's LAN
+IP, for example:
 
----
+```text
+http://192.168.50.76:4031/
+```
 
-## Part 2 — Build & run the Flutter app
+The phone and server must be on the same network. The Linux firewall must also
+allow incoming TCP connections on port `4031` if the phone cannot connect.
 
-### Prerequisites
+To inspect logs:
 
-- Flutter SDK installed
-- Android SDK (minSdkVersion 26)
-- An Android device/emulator with the **Health Connect** app installed (Google Play).
+```bash
+docker compose logs -f
+```
 
-### 1. Generate the platform scaffolding
+To stop the server:
+
+```bash
+docker compose down
+```
+
+Do not map `./stats.db` directly as a Docker file volume. The compose file
+maps `./data` to `/app/data` and sets `DATA_DIR=/app/data` so SQLite can create
+its database and WAL files correctly.
+
+## Server Without Docker
+
+```bash
+cd server
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 4031
+```
+
+The database is created as `server/stats.db` when `DATA_DIR` is not set.
+
+## API Endpoints
+
+- `GET /` - web dashboard
+- `GET /health` - server heartbeat
+- `POST /api/records/batch` - upload records from the app
+- `GET /api/records` - list stored records
+- `GET /api/summary` - aggregate records by type
+- `GET /api/summary/daily` - aggregate records by calendar day
+- `GET /docs` - Swagger API documentation
+
+## Flutter Prerequisites
+
+- Flutter SDK
+- Android SDK and platform tools
+- Android 9/API 28 or newer
+- Android device or emulator with Health Connect available
+- A wearable or app that has written data into Health Connect
+
+Check the local Flutter setup with:
+
+```bash
+flutter doctor
+```
+
+## Android Health Connect Setup
+
+The Android platform files are already included in this repository. If the
+`mobile/android/` directory is missing in a fresh checkout, generate it with:
 
 ```bash
 cd mobile
 flutter create --org com.example --platforms android .
-flutter pub get
 ```
 
-### 2. Add the Health Connect permissions
+The project manifest includes the required Health Connect read permissions,
+Health Connect package visibility, the permission-rationale intent filter, and
+the permission usage activity alias. `MainActivity` extends
+`FlutterFragmentActivity`, which is required by the Health Connect permission
+activity-result flow on newer Android versions.
 
-Edit `mobile/android/app/src/main/AndroidManifest.xml` and add:
+Health Connect must be installed and configured on the phone. After installing
+TrackIT, open Health Connect → App permissions → TrackIT and verify that the
+desired data types, especially Sleep, are allowed.
 
-```xml
-<!-- Declare the Health Connect package so the OS can discover it -->
-<queries>
-    <package android:name="com.google.android.apps.healthdata" />
-</queries>
-
-<!-- Read permissions for the data types the app uses -->
-<uses-permission android:name="android.permission.health.READ_STEPS"/>
-<uses-permission android:name="android.permission.health.READ_DISTANCE"/>
-<uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
-<uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED"/>
-<uses-permission android:name="android.permission.health.READ_SLEEP_SESSION"/>
-<uses-permission android:name="android.permission.health.READ_WEIGHT"/>
-<uses-permission android:name="android.permission.health.READ_HEIGHT"/>
-
-<application
-    ...>
-    <!-- Declare Health Connect launcher -->
-    <meta-data android:name="com.google.android.healthconnect.permission.HEALTH_DATA_INTENT"
-               android:resource="@string/health_app_resource"/>
-</application>
-```
-
-Then in `mobile/android/app/src/main/res/values/strings.xml` add:
-
-```xml
-<resources>
-    <string name="health_app_resource">org.medic.health</string>
-</resources>
-```
-
-### 3. Build & run
+## Run the App Locally
 
 ```bash
 cd mobile
+flutter pub get
 flutter run
 ```
 
-### Using the app
+In the app:
 
-1. **Toggle dark mode** — use the sun/moon icon in the app bar
-2. **Grant access** — opens the Health Connect permission screen
-3. **Fetch stats** — pulls steps / distance / calories / sleep
-4. **Upload to server** — in Settings, enter `http://<your-PC-IP>:8000`, then upload. Records are deduplicated server-side.
-5. Analyze via `/api/summary`, `/api/summary/daily`, or SQL on `stats.db`.
+1. Grant Health Connect access the first time.
+2. Open Settings and enter the server URL, for example `http://192.168.50.76:4031`.
+3. Choose the history range, up to 365 days.
+4. Fetch stats. Records are saved locally on the phone.
+5. Upload the records to the server.
+6. Optionally enable weekly auto-sync in Settings.
 
----
+After the first successful authorization, TrackIT checks the existing Health
+Connect permission automatically when it starts. You should not need to grant
+access again unless the permission is revoked or the app is reinstalled.
 
-## Customizing which stats are tracked
+## Build an APK
 
-Edit the `_types` list in `mobile/lib/services/health_connect_service.dart`.
-Add the matching `<uses-permission>` line to the manifest for each new type.
-The app reads whatever the watch + Health Connect expose; your watch simply has
-to sync its sensor data into Health Connect in the first place.
+```bash
+cd mobile
+flutter clean
+flutter pub get
+flutter build apk --release
+```
 
----
+The APK is generated at:
 
-## Files
+```text
+mobile/build/app/outputs/flutter-apk/app-release.apk
+```
 
-**Mobile (Flutter)**
-- `lib/main.dart` — app entry, theme configuration
-- `lib/screens/home_screen.dart` — grant / fetch / upload flow + summary cards
-- `lib/screens/settings_screen.dart` — server URL + date range
-- `lib/services/health_connect_service.dart` — Health Connect reads
-- `lib/services/api_service.dart` — HTTP upload to server
-- `lib/services/settings_service.dart` — saved preferences
-- `lib/models/health_data.dart` — serializable record model
-- `lib/widgets/stat_card.dart` — stat display card
+Install it with Android Debug Bridge when the phone is connected and USB
+debugging is enabled:
 
-**Server (FastAPI)**
-- `main.py` — API routes
-- `database.py` — SQLite storage + aggregation queries
-- `schemas.py` — request models
+```bash
+adb install -r build/app/outputs/flutter-apk/app-release.apk
+```
+
+## Background Sync Notes
+
+Enable **Auto-sync weekly** in Settings after saving the server URL and granting
+Health Connect access. WorkManager schedules the task when network connectivity
+is available.
+
+Android may delay background work because of battery optimization, Doze mode,
+manufacturer restrictions, or Health Connect background-access rules. For more
+reliable testing, exclude TrackIT from battery optimization on the phone.
+
+The server must be reachable from the phone at the configured LAN address. A
+server URL using `localhost` will not work from a physical phone because it
+refers to the phone itself.
+
+## Data Storage
+
+The app stores its fetched records in a local SQLite database on the phone.
+Settings such as the server URL, fetch range, and auto-sync preference use
+SharedPreferences.
+
+The server stores uploaded records in SQLite. Docker stores the database under
+`server/data/` so it survives container rebuilds and restarts.
+
+## Customizing Tracked Data
+
+Edit the `_types` list in:
+
+```text
+mobile/lib/services/health_connect_service.dart
+```
+
+When adding a Health Connect type, also add its matching Android read
+permission to `mobile/android/app/src/main/AndroidManifest.xml`. The watch or
+source app must first sync that data type into Health Connect.
+
+## Main Files
+
+### Mobile
+
+- `lib/main.dart` - app entry point and WorkManager initialization
+- `lib/screens/home_screen.dart` - permissions, fetching, persistence, upload, and stat cards
+- `lib/screens/settings_screen.dart` - server URL, history range, and auto-sync
+- `lib/screens/about_screen.dart` - app information and privacy description
+- `lib/services/health_connect_service.dart` - Health Connect access
+- `lib/services/local_storage_service.dart` - local SQLite records
+- `lib/services/background_sync_service.dart` - weekly background sync
+- `lib/services/api_service.dart` - server communication
+- `lib/services/settings_service.dart` - saved preferences
+- `lib/models/health_data.dart` - health record model
+
+### Server
+
+- `main.py` - FastAPI routes and dashboard
+- `database.py` - SQLite storage and aggregation queries
+- `schemas.py` - API request models
+- `Dockerfile` - server image
+- `docker-compose.yml` - server deployment and persistent storage

@@ -40,6 +40,16 @@ class HealthConnectService {
     }
   }
 
+  Future<bool> hasPermissions() async {
+    try {
+      await _configure();
+      final permissions = List.filled(_types.length, HealthDataAccess.READ);
+      return await _health.hasPermissions(_types, permissions: permissions) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<(bool, String)> requestAuthorization() async {
     try {
       await _configure();

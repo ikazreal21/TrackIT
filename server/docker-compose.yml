@@ -2,7 +2,7 @@ services:
   stat_tracker_server:
     build: .
     ports:
-      - "4031:8000"
+      - "4031:4031"
     environment:
       - DATA_DIR=/app/data
     volumes:
