@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrackIT - Health Dashboard</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-content">
+                <img src="/static/logo.png" alt="TrackIT Logo" class="header-logo">
+                <div>
+                    <h1>Health Dashboard</h1>
+                    <p class="greeting">Your weekly summary</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                    <span class="theme-icon">🌙</span>
+                </button>
+                <div class="status-indicator">
+                    <span class="status-dot"></span>
+                    <span>Live</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="metrics-grid">
+            <div class="metric-card hero-card">
+                <div class="metric-header">
+                    <span class="metric-label">Heart Rate</span>
+                    <span class="metric-unit">bpm</span>
+                </div>
+                <div class="metric-value" id="heartRate">--</div>
+                <div class="metric-range">
+                    <span id="hrMax">--</span> Max
+                    <span id="hrMin">--</span> Min
+                </div>
+                <div class="ecg-chart-container">
+                    <canvas id="ecgChart"></canvas>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Heart Rate Variability</span>
+                    <span class="metric-value-small" id="hrvValue">-- ms</span>
+                </div>
+                <div class="status-badge stable">
+                    <span class="status-icon">✓</span>
+                    <span id="hrvStatus">Stable</span>
+                </div>
+                <div class="mini-chart-container">
+                    <canvas id="hrvChart"></canvas>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Steps Today</span>
+                    <span class="metric-value-small" id="stepsValue">--</span>
+                </div>
+                <div class="progress-ring">
+                    <svg width="120" height="120">
+                        <circle class="progress-bg" cx="60" cy="60" r="50"></circle>
+                        <circle class="progress-fill" id="stepsProgress" cx="60" cy="60" r="50"></circle>
+                    </svg>
+                    <div class="progress-text">
+                        <span id="stepsPercent">0%</span>
+                    </div>
+                </div>
+                <div class="metric-detail" id="stepsGoal">Goal: 10,000</div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-label">Calories Burned</span>
+                    <span class="metric-value-small" id="caloriesValue">-- kcal</span>
+                </div>
+                <div class="status-badge low">
+                    <span class="status-icon">🔥</span>
+                    <span id="caloriesStatus">Active</span>
+                </div>
+                <div class="mini-chart-container">
+                    <canvas id="caloriesChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="weekly-section">
+            <h2 class="section-title">Weekly Activity</h2>
+            <div class="weekly-chart-card">
+                <canvas id="weeklyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="insights-section">
+            <h2 class="section-title">Insights</h2>
+            <div class="insights-grid">
+                <div class="insight-card">
+                    <div class="insight-icon"></div>
+                    <div class="insight-content">
+                        <div class="insight-title">Total Records</div>
+                        <div class="insight-value" id="totalRecords">--</div>
+                        <div class="insight-detail">Data points collected</div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-icon">📅</div>
+                    <div class="insight-content">
+                        <div class="insight-title">Days Tracked</div>
+                        <div class="insight-value" id="daysTracked">--</div>
+                        <div class="insight-detail">Active recording days</div>
+                    </div>
+                </div>
+                <div class="insight-card">
+                    <div class="insight-icon"></div>
+                    <div class="insight-content">
+                        <div class="insight-title">Data Types</div>
+                        <div class="insight-value" id="dataTypes">--</div>
+                        <div class="insight-detail">Metrics monitored</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="recent-section">
+            <h2 class="section-title">Recent Activity</h2>
+            <div class="activity-list" id="activityList">
+            </div>
+        </div>
+
+        <footer class="app-footer">
+            <a href="/docs">API Docs</a>
+            <a href="/health">Health Check</a>
+            <a href="/bare">Simple View</a>
+        </footer>
+    </div>
+
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

@@ -9,10 +9,12 @@ Run:
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 import database
 from schemas import SummaryParams, UploadBatch
@@ -25,6 +27,9 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Stat Tracker Server", version="1.0.0", lifespan=lifespan)
+
+templates_dir = Path(__file__).parent / "templates"
+app.mount("/static", StaticFiles(directory=str(templates_dir)), name="static")
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,6 +46,12 @@ def health():
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
+    html_path = templates_dir / "dashboard.html"
+    return HTMLResponse(content=html_path.read_text())
+
+
+@app.get("/bare", response_class=HTMLResponse)
+def bare_dashboard():
     total_records = database.query_records(limit=1_000_000)
     type_summary = database.summary(group_by="type")
     daily_summary = database.summary(group_by="substr(date_from, 1, 10)")
@@ -83,7 +94,7 @@ def dashboard():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TrackIT Server</title>
+    <title>TrackIT Server - Simple</title>
     <style>
         :root {{
         color-scheme: light dark;
@@ -164,7 +175,7 @@ def dashboard():
 </head>
 <body>
     <h1>TrackIT Server</h1>
-    <p class="subtitle">Personal health data tracker dashboard</p>
+    <p class="subtitle">Simple Dashboard View</p>
     <span class="status">Running</span>
 
     <div class="section">
@@ -213,7 +224,7 @@ def dashboard():
     </div>
 
     <footer style="margin-top: 3rem; color: #64748b; font-size: 0.85rem;">
-        API endpoints: <a href="/docs" style="color:#38bdf8">/docs</a> | <a href="/health" style="color:#38bdf8">/health</a>
+        <a href="/" style="color:#38bdf8">Full Dashboard</a> | <a href="/docs" style="color:#38bdf8">/docs</a> | <a href="/health" style="color:#38bdf8">/health</a>
     </footer>
 </body>
 </html>"""
