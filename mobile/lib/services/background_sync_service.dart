@@ -56,7 +56,7 @@ class BackgroundSyncService {
       weeklySyncTask,
       frequency: const Duration(days: 7),
       constraints: Constraints(networkType: NetworkType.connected),
-      existingWorkPolicy: ExistingWorkPolicy.replace,
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
     );
     log('Weekly background sync scheduled');
   }
@@ -67,7 +67,7 @@ class BackgroundSyncService {
       dailySyncTask,
       frequency: const Duration(days: 1),
       constraints: Constraints(networkType: NetworkType.connected),
-      existingWorkPolicy: ExistingWorkPolicy.replace,
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.replace,
     );
     log('Daily background sync scheduled');
   }
