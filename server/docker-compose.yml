@@ -2,7 +2,9 @@ services:
   stat_tracker_server:
     build: .
     ports:
-      - "4031:4031"
+      - "4031:8000"
+    environment:
+      - DATA_DIR=/app/data
     volumes:
-      - ./stats.db:/app/stats.db
+      - ./data:/app/data
     restart: unless-stopped

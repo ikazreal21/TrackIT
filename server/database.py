@@ -8,10 +8,9 @@ import os
 import sqlite3
 from contextlib import contextmanager
 
-DATABASE_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    "stats.db",
-)
+_data_dir = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+os.makedirs(_data_dir, exist_ok=True)
+DATABASE_PATH = os.path.join(_data_dir, "stats.db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS records (

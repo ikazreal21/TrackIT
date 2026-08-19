@@ -11,8 +11,14 @@ class HealthConnectService {
     HealthDataType.HEART_RATE,
     HealthDataType.WEIGHT,
     HealthDataType.SLEEP_SESSION,
+    HealthDataType.SLEEP_ASLEEP,
+    HealthDataType.SLEEP_LIGHT,
+    HealthDataType.SLEEP_DEEP,
+    HealthDataType.SLEEP_REM,
     HealthDataType.DISTANCE_DELTA,
     HealthDataType.ACTIVE_ENERGY_BURNED,
+    HealthDataType.TOTAL_CALORIES_BURNED,
+    HealthDataType.BASAL_ENERGY_BURNED,
     HealthDataType.HEIGHT,
   ];
 

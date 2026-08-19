@@ -89,8 +89,9 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  String _summary(String type, {String prefix = '', String unit = ''}) {
-    final matches = _records.where((r) => r.type == type).toList();
+  String _summary(String type, {String prefix = '', String unit = '', List<String> altTypes = const []}) {
+    final allTypes = [type, ...altTypes];
+    final matches = _records.where((r) => allTypes.contains(r.type)).toList();
     if (matches.isEmpty) return '--';
     final total = matches.fold<num>(0, (sum, r) => sum + r.value);
     return '$prefix${total.toStringAsFixed(0)}$unit';
@@ -173,13 +174,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: 'Calories (kcal)',
                       icon: Icons.local_fire_department,
                       accent: Colors.deepOrange,
-                      value: _summary('ACTIVE_ENERGY_BURNED'),
+                      value: _summary(
+                        'ACTIVE_ENERGY_BURNED',
+                        altTypes: ['TOTAL_CALORIES_BURNED', 'BASAL_ENERGY_BURNED'],
+                      ),
                     ),
                     StatCard(
                       title: 'Sleep (h)',
                       icon: Icons.bedtime,
                       accent: Colors.indigo,
-                      value: _summary('SLEEP_SESSION', unit: ' h', prefix: ''),
+                      value: _summary(
+                        'SLEEP_SESSION',
+                        unit: ' h',
+                        prefix: '',
+                        altTypes: ['SLEEP_ASLEEP', 'SLEEP_LIGHT', 'SLEEP_DEEP', 'SLEEP_REM'],
+                      ),
                     ),
                   ],
                 ),
