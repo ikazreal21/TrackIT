@@ -44,7 +44,6 @@ def init_db() -> None:
 
 
 def insert_batch(source: str, rows: list[dict]) -> int:
-    """Insert multiple records, skipping exact duplicates. Returns count created."""
     created = 0
     with get_conn() as conn:
         cur = conn.cursor()
@@ -76,15 +75,42 @@ def insert_batch(source: str, rows: list[dict]) -> int:
     return created
 
 
-def query_records(types: list[str] | None = None, limit: int = 1000) -> list[dict]:
-    sql = "SELECT id, source, type, value, unit, date_from, date_to FROM records"
+def _build_type_filter(types: list[str] | None) -> tuple[str, list]:
+    if not types:
+        return "", []
+    placeholders = ",".join("?" for _ in types)
+    return f"WHERE type IN ({placeholders})", list(types)
+
+
+def _build_date_filter(
+    start_date: str | None, end_date: str | None, existing_where: str = ""
+) -> tuple[str, list]:
+    clauses = []
     params: list = []
-    if types:
-        placeholders = ",".join("?" for _ in types)
-        sql += f" WHERE type IN ({placeholders})"
-        params.extend(types)
-    sql += " ORDER BY date_from DESC LIMIT ?"
-    params.append(limit)
+    if existing_where:
+        clauses.append(existing_where)
+    if start_date:
+        clauses.append("date_from >= ?")
+        params.append(start_date)
+    if end_date:
+        clauses.append("date_from <= ?")
+        params.append(end_date + "T23:59:59")
+    if not clauses:
+        return "", []
+    return "WHERE " + " AND ".join(clauses), params
+
+
+def query_records(
+    types: list[str] | None = None,
+    limit: int = 1000,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list[dict]:
+    type_where, type_params = _build_type_filter(types)
+    date_where, date_params = _build_date_filter(start_date, end_date, type_where)
+
+    sql = f"SELECT id, source, type, value, unit, date_from, date_to FROM records {date_where} ORDER BY date_from DESC LIMIT ?"
+    params = type_params + date_params + [limit]
 
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
@@ -105,22 +131,21 @@ def query_records(types: list[str] | None = None, limit: int = 1000) -> list[dic
 def summary(
     types: list[str] | None = None,
     group_by: str = "type",
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> list[dict]:
-    """Basic analysis: aggregate records (count, sum, avg, min, max)."""
-    type_filter = ""
-    params: list = []
-    if types:
-        placeholders = ",".join("?" for _ in types)
-        type_filter = f"WHERE type IN ({placeholders})"
-        params.extend(types)
+    type_where, type_params = _build_type_filter(types)
+    date_where, date_params = _build_date_filter(start_date, end_date, type_where)
 
     sql = f"""
         SELECT {group_by}, COUNT(*), SUM(value), AVG(value), MIN(value), MAX(value)
         FROM records
-        {type_filter}
+        {date_where}
         GROUP BY {group_by}
         ORDER BY {group_by}
     """
+    params = type_params + date_params
+
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
 
@@ -135,3 +160,65 @@ def summary(
         }
         for r in rows
     ]
+
+
+def timeseries(
+    record_type: str,
+    bucket: str = "day",
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list[dict]:
+    bucket_expr = {
+        "hour": "substr(date_from, 1, 13)",
+        "day": "substr(date_from, 1, 10)",
+        "week": "strftime('%Y-W%W', date_from)",
+        "month": "substr(date_from, 1, 7)",
+    }
+    group_expr = bucket_expr.get(bucket, bucket_expr["day"])
+
+    clauses = ["type = ?"]
+    params: list = [record_type]
+
+    if start_date:
+        clauses.append("date_from >= ?")
+        params.append(start_date)
+    if end_date:
+        clauses.append("date_from <= ?")
+        params.append(end_date + "T23:59:59")
+
+    date_where = "WHERE " + " AND ".join(clauses)
+
+    sql = f"""
+        SELECT {group_expr}, COUNT(*), SUM(value), AVG(value), MIN(value), MAX(value)
+        FROM records
+        {date_where}
+        GROUP BY {group_expr}
+        ORDER BY {group_expr}
+    """
+
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+
+    return [
+        {
+            "bucket": r[0],
+            "count": r[1],
+            "sum": r[2],
+            "avg": r[3],
+            "min": r[4],
+            "max": r[5],
+        }
+        for r in rows
+    ]
+
+
+def date_range() -> dict:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT MIN(substr(date_from, 1, 10)), MAX(substr(date_from, 1, 10)), COUNT(*) FROM records"
+        ).fetchone()
+    return {
+        "earliest": row[0],
+        "latest": row[1],
+        "total_records": row[2],
+    }
