@@ -653,7 +653,16 @@ function renderDistribution(typeSummary) {
                         pointStyle: 'circle',
                     },
                 },
-                tooltip: chartDefaults().plugins.tooltip,
+                tooltip: {
+                    ...chartDefaults().plugins.tooltip,
+                    callbacks: {
+                        label: function(ctx) {
+                            const val = ctx.parsed;
+                            const rounded = Math.round(val * 10) / 10;
+                            return ctx.label + ': ' + rounded.toLocaleString();
+                        }
+                    }
+                },
             },
         },
     });
