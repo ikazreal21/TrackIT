@@ -86,8 +86,32 @@ document.getElementById('rangeSelector').addEventListener('click', (e) => {
     document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentRange = btn.dataset.range;
-    loadDashboard();
+
+    const datePickerGroup = document.getElementById('datePickerGroup');
+    if (currentRange === 'custom') {
+        datePickerGroup.style.display = 'flex';
+        initDatePickers();
+    } else {
+        datePickerGroup.style.display = 'none';
+        loadDashboard();
+    }
 });
+
+function initDatePickers() {
+    const startInput = document.getElementById('startDate');
+    const endInput = document.getElementById('endDate');
+
+    if (!startInput.value) {
+        const now = new Date();
+        const weekAgo = new Date(now);
+        weekAgo.setDate(weekAgo.getDate() - 6);
+        startInput.value = weekAgo.toISOString().slice(0, 10);
+        endInput.value = now.toISOString().slice(0, 10);
+    }
+
+    startInput.onchange = () => loadDashboard();
+    endInput.onchange = () => loadDashboard();
+}
 
 function getDateRange(range) {
     const now = new Date();
@@ -99,10 +123,15 @@ function getDateRange(range) {
         const d = new Date(now);
         d.setDate(d.getDate() - 6);
         start = d.toISOString().slice(0, 10);
-    } else {
+    } else if (range === 'month') {
         const d = new Date(now);
         d.setDate(d.getDate() - 29);
         start = d.toISOString().slice(0, 10);
+    } else if (range === 'custom') {
+        const startInput = document.getElementById('startDate');
+        const endInput = document.getElementById('endDate');
+        start = startInput.value || end;
+        return { start, end: endInput.value || end };
     }
     return { start, end };
 }
@@ -142,6 +171,13 @@ function chartDefaults() {
                 bodyFont: { family: "'JetBrains Mono'", size: 11 },
                 displayColors: true,
                 boxPadding: 4,
+                callbacks: {
+                    label: function(ctx) {
+                        const val = ctx.parsed.y;
+                        const rounded = Math.round(val * 10) / 10;
+                        return ctx.dataset.label + ': ' + rounded.toLocaleString();
+                    }
+                }
             },
         },
         scales: {
@@ -151,7 +187,12 @@ function chartDefaults() {
                 border: { display: false },
             },
             y: {
-                ticks: { color: c.text, font: { family: "'JetBrains Mono'", size: 10 }, maxTicksLimit: 5 },
+                ticks: {
+                    color: c.text,
+                    font: { family: "'JetBrains Mono'", size: 10 },
+                    maxTicksLimit: 5,
+                    callback: function(val) { return Math.round(val * 10) / 10; }
+                },
                 grid: { color: c.grid, drawBorder: false },
                 border: { display: false },
             },
@@ -205,19 +246,28 @@ async function loadDashboard() {
 
 function formatDateRange(start, end) {
     const opts = { month: 'short', day: 'numeric' };
-    const s = new Date(start + 'T00:00:00').toLocaleDateString('en-US', opts);
-    const e = new Date(end + 'T00:00:00').toLocaleDateString('en-US', opts);
+    const s = new Date(start + 'T00:00:00Z').toLocaleDateString('en-US', opts);
+    const e = new Date(end + 'T00:00:00Z').toLocaleDateString('en-US', opts);
     if (s === e) return s;
     return s + ' - ' + e;
 }
 
 function formatLabel(bucket, range) {
     if (range === 'day' || bucket.length > 10) {
-        const d = new Date(bucket.length > 10 ? bucket + ':00:00' : bucket + 'T00:00:00');
-        return d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+        const raw = bucket.length > 10 ? bucket + ':00:00Z' : bucket + 'T00:00:00Z';
+        const d = new Date(raw);
+        return d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true, timeZone: 'UTC' });
     }
-    const d = new Date(bucket + 'T00:00:00');
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const d = new Date(bucket + 'T00:00:00Z');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+function formatNum(val, type) {
+    const intTypes = ['HEART_RATE', 'STEPS', 'ACTIVE_ENERGY_BURNED', 'TOTAL_CALORIES_BURNED', 'BASAL_ENERGY_BURNED'];
+    if (intTypes.includes(type)) {
+        return Math.round(val).toLocaleString();
+    }
+    return (Math.round(val * 10) / 10).toString();
 }
 
 function updateMetricCards(typeSummary, hrTs, stepsTs, calTs, totalCalTs, sleepTs) {
@@ -426,7 +476,7 @@ function renderStepsChart(stepsTs, distTs) {
                 },
                 {
                     label: 'Distance',
-                    data: allBuckets.map(b => distByBucket[b] || 0),
+                    data: allBuckets.map(b => Math.round((distByBucket[b] || 0) * 10) / 10),
                     type: 'line',
                     borderColor: COLORS.blue,
                     borderWidth: 2,
@@ -626,7 +676,7 @@ function renderRecords(records) {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
         const val = parseFloat(r.value);
-        const displayVal = r.type === 'STEPS' ? Math.round(val).toLocaleString() : val.toFixed(1);
+        const displayVal = formatNum(val, r.type);
         return '<div class="record-item">' +
             '<div class="record-left">' +
                 '<div class="record-dot ' + dotClass + '"></div>' +
