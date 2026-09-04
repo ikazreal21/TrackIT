@@ -6,7 +6,10 @@ import '../theme.dart';
 import '../utils/labels.dart';
 
 /// Records tab: recent Health Connect records grouped by day.
-class RecordsTab extends StatelessWidget {
+///
+/// Shows the latest 300 records; sorting + grouping is memoized so the
+/// full store isn't re-scanned on every rebuild.
+class RecordsTab extends StatefulWidget {
   const RecordsTab({
     super.key,
     required this.records,
@@ -15,6 +18,37 @@ class RecordsTab extends StatelessWidget {
 
   final List<HealthRecord> records;
   final Future<void> Function() onRefresh;
+
+  @override
+  State<RecordsTab> createState() => _RecordsTabState();
+}
+
+class _RecordsTabState extends State<RecordsTab> {
+  static const _limit = 300;
+
+  List<HealthRecord>? _cachedRecords;
+  Map<String, List<HealthRecord>>? _sections;
+  int _total = 0;
+
+  Map<String, List<HealthRecord>> _sectionsFor() {
+    if (identical(widget.records, _cachedRecords) && _sections != null) {
+      return _sections!;
+    }
+    final now = DateTime.now();
+    final sorted = [...widget.records]
+      ..sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
+    _total = sorted.length;
+    final sections = <String, List<HealthRecord>>{};
+    for (final r in sorted.take(_limit)) {
+      final local = r.dateFrom.toLocal();
+      final key =
+          _headerFor(DateTime(local.year, local.month, local.day), now);
+      sections.putIfAbsent(key, () => []).add(r);
+    }
+    _cachedRecords = widget.records;
+    _sections = sections;
+    return sections;
+  }
 
   String _headerFor(DateTime day, DateTime today) {
     final d = DateTime(day.year, day.month, day.day);
@@ -28,23 +62,13 @@ class RecordsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final now = DateTime.now();
-    final sorted = [...records]
-      ..sort((a, b) => b.dateFrom.compareTo(a.dateFrom));
-
-    final sections = <String, List<HealthRecord>>{};
-    for (final r in sorted) {
-      final local = r.dateFrom.toLocal();
-      final key =
-          _headerFor(DateTime(local.year, local.month, local.day), now);
-      sections.putIfAbsent(key, () => []).add(r);
-    }
+    final sections = _sectionsFor();
 
     return SafeArea(
       child: RefreshIndicator(
-        onRefresh: onRefresh,
+        onRefresh: widget.onRefresh,
         color: AppColors.teal,
-        child: sorted.isEmpty
+        child: sections.isEmpty
             ? ListView(
                 padding: const EdgeInsets.all(32),
                 children: [
@@ -57,7 +81,7 @@ class RecordsTab extends StatelessWidget {
                       style: theme.textTheme.titleMedium),
                   const SizedBox(height: 6),
                   Text(
-                    'Pull down to fetch, or tap the sync icon on Home.',
+                    'Pull down to fetch, or use Fetch on Home.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall,
                   ),
@@ -65,8 +89,19 @@ class RecordsTab extends StatelessWidget {
               )
             : ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                itemCount: sections.length,
+                itemCount:
+                    sections.length + (_total > _limit ? 1 : 0),
                 itemBuilder: (ctx, i) {
+                  if (i == sections.length) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Text(
+                        'Showing latest $_limit of $_total records',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    );
+                  }
                   final header = sections.keys.elementAt(i);
                   final items = sections[header]!;
                   return Column(

@@ -9,7 +9,10 @@ import '../widgets/rings.dart';
 import '../widgets/score_card.dart';
 
 /// Home tab: date header, balance rings, Sleep + Strain score cards.
-class HomeTab extends StatelessWidget {
+///
+/// Aggregates are memoized on the records list identity so the 29k-record
+/// scans don't rerun on every rebuild.
+class HomeTab extends StatefulWidget {
   const HomeTab({
     super.key,
     required this.records,
@@ -18,7 +21,8 @@ class HomeTab extends StatelessWidget {
     required this.authorized,
     required this.syncing,
     required this.onGrant,
-    required this.onSync,
+    required this.onFetch,
+    required this.onUpload,
     required this.onOpenSleep,
     required this.onOpenStrain,
   });
@@ -29,18 +33,36 @@ class HomeTab extends StatelessWidget {
   final bool authorized;
   final bool syncing;
   final VoidCallback onGrant;
-  final VoidCallback onSync;
+  final VoidCallback onFetch;
+  final VoidCallback onUpload;
   final void Function(DateTime evening) onOpenSleep;
   final void Function(DateTime day) onOpenStrain;
 
   @override
+  State<HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<HomeTab> {
+  List<HealthRecord>? _cachedRecords;
+  List<SleepNight>? _nights;
+  Map<DateTime, DayTotals>? _days;
+
+  void _ensureCache() {
+    if (identical(widget.records, _cachedRecords) && _nights != null) return;
+    _nights = sleepNights(widget.records);
+    _days = dayTotals(widget.records);
+    _cachedRecords = widget.records;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    _ensureCache();
     final theme = Theme.of(context);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    final nights = sleepNights(records);
-    final days = dayTotals(records);
+    final nights = _nights!;
+    final days = _days!;
 
     // Last night = most recent evening on/before today.
     SleepNight? lastNight;
@@ -70,13 +92,11 @@ class HomeTab extends StatelessWidget {
       priorAvgHours,
     );
     final strain = strainScore(todayT);
-    final priorStrain = priorDays.isEmpty
+    final strainVals =
+        priorDays.map(strainScore).whereType<double>().toList();
+    final priorStrain = strainVals.isEmpty
         ? null
-        : priorDays
-                .map(strainScore)
-                .whereType<double>()
-                .fold<double>(0, (a, b) => a + b) /
-            priorDays.map(strainScore).whereType<double>().length;
+        : strainVals.reduce((a, b) => a + b) / strainVals.length;
     final strainDelta = deltaPct(
       strain,
       priorStrain?.isNaN == true ? null : priorStrain,
@@ -90,7 +110,7 @@ class HomeTab extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
-          // Header row: avatar + pill ... sync action.
+          // Header row: avatar + pill ... fetch + upload actions.
           Row(
             children: [
               const CircleAvatar(
@@ -116,17 +136,24 @@ class HomeTab extends StatelessWidget {
                     )),
               ),
               const Spacer(),
-              IconButton(
-                tooltip: 'Fetch + upload',
-                onPressed: syncing ? null : onSync,
-                icon: syncing
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.sync),
-              ),
+              if (widget.syncing)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else ...[
+                IconButton(
+                  tooltip: 'Fetch from Health Connect',
+                  onPressed: widget.onFetch,
+                  icon: const Icon(Icons.download),
+                ),
+                IconButton(
+                  tooltip: 'Upload to server',
+                  onPressed: widget.onUpload,
+                  icon: const Icon(Icons.cloud_upload_outlined),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 10),
@@ -135,14 +162,14 @@ class HomeTab extends StatelessWidget {
             style: theme.textTheme.titleMedium,
           ),
           const SizedBox(height: 12),
-          if (!supported && supportMsg.isNotEmpty)
+          if (!widget.supported && widget.supportMsg.isNotEmpty)
             _noteCard(theme,
-                'Health Connect not available: $supportMsg', null),
-          if (supported && !authorized)
+                'Health Connect not available: ${widget.supportMsg}', null),
+          if (widget.supported && !widget.authorized)
             _noteCard(
               theme,
               'Grant Health Connect access once — it stays on, no need to grant again.',
-              ('Grant access', onGrant),
+              ('Grant access', widget.onGrant),
             ),
           _BalanceCard(
             sleep: sleep,
@@ -160,7 +187,7 @@ class HomeTab extends StatelessWidget {
             status: sleep == null ? 'No data' : bandFor(sleep),
             insight: sleepInsight(sleep),
             deltaPct: sleepDelta,
-            onTap: () => onOpenSleep(lastEvening),
+            onTap: () => widget.onOpenSleep(lastEvening),
           ),
           const SizedBox(height: 12),
           ScoreCard(
@@ -170,7 +197,7 @@ class HomeTab extends StatelessWidget {
             status: strain == null ? 'No data' : bandFor(strain),
             insight: strainInsight(strain),
             deltaPct: strainDelta,
-            onTap: () => onOpenStrain(today),
+            onTap: () => widget.onOpenStrain(today),
           ),
         ],
       ),

@@ -25,6 +25,35 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
   late DateTime _customStart;
   late DateTime _customEnd;
 
+  // Memoized window filter — rebuilt only when inputs change.
+  List<HealthRecord>? _cachedRecords;
+  _Range? _cachedRange;
+  DateTime? _cachedAnchor;
+  DateTime? _cachedCustomStart;
+  DateTime? _cachedCustomEnd;
+  List<HealthRecord>? _cachedInView;
+
+  List<HealthRecord> _inViewMemo() {
+    if (identical(widget.records, _cachedRecords) &&
+        _cachedRange == _range &&
+        _cachedAnchor == _anchor &&
+        _cachedCustomStart == _customStart &&
+        _cachedCustomEnd == _customEnd &&
+        _cachedInView != null) {
+      return _cachedInView!;
+    }
+    final (s, e) = _window();
+    _cachedInView = widget.records
+        .where((r) => !r.dateFrom.isBefore(s) && r.dateFrom.isBefore(e))
+        .toList();
+    _cachedRecords = widget.records;
+    _cachedRange = _range;
+    _cachedAnchor = _anchor;
+    _cachedCustomStart = _customStart;
+    _cachedCustomEnd = _customEnd;
+    return _cachedInView!;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -59,12 +88,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
     return e.difference(s).inDays.clamp(1, 10000);
   }
 
-  List<HealthRecord> get _inView {
-    final (s, e) = _window();
-    return widget.records
-        .where((r) => !r.dateFrom.isBefore(s) && r.dateFrom.isBefore(e))
-        .toList();
-  }
+  List<HealthRecord> get _inView => _inViewMemo();
 
   String _rangeLabel() {
     final (s, e) = _window();
@@ -161,6 +185,13 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
             child: SizedBox(
               width: double.infinity,
               child: SegmentedButton<_Range>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  textStyle: WidgetStatePropertyAll(
+                    TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
                 segments: const [
                   ButtonSegment(value: _Range.day, label: Text('Day')),
                   ButtonSegment(value: _Range.week, label: Text('Week')),
@@ -247,6 +278,7 @@ class _AnalyticsTabState extends State<AnalyticsTab> {
               crossAxisCount: 2,
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
+              childAspectRatio: 0.82,
               children: [
                 StatCard(
                   title: 'Steps',

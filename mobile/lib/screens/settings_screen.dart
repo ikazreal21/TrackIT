@@ -408,6 +408,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: SizedBox(
                       width: double.infinity,
                       child: SegmentedButton<String>(
+                        showSelectedIcon: false,
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                        ),
                         segments: const [
                           ButtonSegment(
                               value: 'daily', label: Text('Daily')),
