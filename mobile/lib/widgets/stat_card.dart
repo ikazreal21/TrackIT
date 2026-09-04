@@ -5,12 +5,14 @@ class StatCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.value,
+    this.subtitle,
     this.icon,
     this.accent = Colors.teal,
   });
 
   final String title;
   final String value;
+  final String? subtitle;
   final IconData? icon;
   final Color accent;
 
@@ -46,6 +48,18 @@ class StatCard extends StatelessWidget {
                 textAlign: TextAlign.center,
               ),
             ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ],
         ),
       ),

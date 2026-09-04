@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 
-import 'screens/home_screen.dart';
+import 'screens/shell.dart';
 import 'services/background_sync_service.dart';
+import 'theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await BackgroundSyncService.initialize();
+  // Background sync is only available on Android/iOS. Guard it so the app
+  // can still run elsewhere (e.g. web preview) without crashing on startup.
+  try {
+    await BackgroundSyncService.initialize();
+  } catch (_) {
+    // Unsupported platform — background sync stays disabled.
+  }
   runApp(const TrackITApp());
 }
 
@@ -17,11 +24,12 @@ class TrackITApp extends StatefulWidget {
 }
 
 class _TrackITAppState extends State<TrackITApp> {
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.dark;
 
   void _toggleDarkMode() {
     setState(() {
-      _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      _themeMode =
+          _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     });
   }
 
@@ -31,15 +39,15 @@ class _TrackITAppState extends State<TrackITApp> {
       title: 'TrackIT',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.light),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal, brightness: Brightness.dark),
-        useMaterial3: true,
-      ),
+      darkTheme: AppTheme.dark(),
       themeMode: _themeMode,
-      home: HomeScreen(onToggleDarkMode: _toggleDarkMode),
+      home: MainScreen(
+        onToggleDarkMode: _toggleDarkMode,
+        isDark: _themeMode == ThemeMode.dark,
+      ),
     );
   }
 }

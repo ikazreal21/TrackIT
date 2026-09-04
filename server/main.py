@@ -112,3 +112,13 @@ def timeseries(
 @app.get("/api/date-range")
 def get_date_range():
     return database.date_range()
+
+
+@app.get("/api/sleep")
+def sleep(
+    bucket: str = "day",
+    start_date: str | None = None,
+    end_date: str | None = None,
+):
+    """Sleep hours per bucket, derived from record intervals."""
+    return {"data": database.sleep_summary(bucket, start_date, end_date)}

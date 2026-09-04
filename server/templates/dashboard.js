@@ -215,7 +215,7 @@ async function loadDashboard() {
             fetch(`/api/timeseries/DISTANCE_DELTA?bucket=${bucket}&start_date=${start}&end_date=${end}`),
             fetch(`/api/timeseries/ACTIVE_ENERGY_BURNED?bucket=${bucket}&start_date=${start}&end_date=${end}`),
             fetch(`/api/timeseries/TOTAL_CALORIES_BURNED?bucket=${bucket}&start_date=${start}&end_date=${end}`),
-            fetch(`/api/timeseries/SLEEP_SESSION?bucket=${bucket}&start_date=${start}&end_date=${end}`),
+            fetch(`/api/sleep?bucket=${bucket}&start_date=${start}&end_date=${end}`),
             fetch(`/api/timeseries/WEIGHT?bucket=${bucket}&start_date=${start}&end_date=${end}`),
         ]);
 
@@ -302,11 +302,10 @@ function updateMetricCards(typeSummary, hrTs, stepsTs, calTs, totalCalTs, sleepT
         document.getElementById('caloriesAvg').textContent = '--';
     }
 
-    const sleepSummary = typeSummary.find(s => s.key === 'SLEEP_SESSION' || s.key === 'SLEEP_ASLEEP');
-    if (sleepSummary) {
-        const totalHrs = sleepSummary.sum / 3600;
-        const dayCount = new Set(sleepTs.map(d => d.bucket)).size || 1;
-        const avgHrs = totalHrs / dayCount;
+    const sleepHours = sleepTs.map(d => d.hours || 0);
+    if (sleepHours.length) {
+        const totalHrs = sleepHours.reduce((a, b) => a + b, 0);
+        const avgHrs = totalHrs / sleepHours.length;
         document.getElementById('sleepValue').textContent = totalHrs.toFixed(1);
         document.getElementById('sleepAvg').textContent = avgHrs.toFixed(1) + ' hrs/night';
     } else {
@@ -319,7 +318,7 @@ function renderSparklines(hrTs, stepsTs, calTs, sleepTs) {
     renderSparkline('hrSparkline', hrTs.map(d => d.avg), COLORS.red, COLORS.redDim);
     renderSparkline('stepsSparkline', stepsTs.map(d => d.sum), COLORS.green, COLORS.greenDim);
     renderSparkline('caloriesSparkline', calTs.map(d => d.sum), COLORS.orange, COLORS.orangeDim);
-    renderSparkline('sleepSparkline', sleepTs.map(d => d.sum / 3600), COLORS.violet, COLORS.violetDim);
+    renderSparkline('sleepSparkline', sleepTs.map(d => d.hours), COLORS.violet, COLORS.violetDim);
 }
 
 function renderSparkline(canvasId, data, color, fillColor) {
@@ -554,7 +553,7 @@ function renderSleepChart(data) {
     if (!data.length) { clearChart(id); return; }
 
     const labels = data.map(d => formatLabel(d.bucket, currentRange));
-    const hours = data.map(d => +(d.sum / 3600).toFixed(1));
+    const hours = data.map(d => d.hours);
 
     charts[id] = new Chart(document.getElementById(id), {
         type: 'bar',

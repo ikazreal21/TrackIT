@@ -222,3 +222,66 @@ def date_range() -> dict:
         "latest": row[1],
         "total_records": row[2],
     }
+
+
+def _duration_seconds(col_from: str = "date_from", col_to: str = "date_to") -> str:
+    """SQL expression: seconds between two ISO-8601 timestamps.
+
+    Normalises the 'T' separator and trailing 'Z' so phone-style UTC
+    strings parse, and falls back to 0 when unparseable.
+    """
+    norm = lambda c: f"REPLACE(REPLACE({c}, 'T', ' '), 'Z', '')"  # noqa: E731
+    return (
+        f"COALESCE(strftime('%s', {norm(col_to)})"
+        f" - strftime('%s', {norm(col_from)}), 0)"
+    )
+
+
+def sleep_summary(
+    bucket: str = "day",
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> list[dict]:
+    """Sleep hours per bucket, computed from record intervals.
+
+    Phone sleep values arrive in minutes while older data may use seconds,
+    so durations are derived from date_to - date_from instead of value.
+    Prefers SLEEP_SESSION; falls back to SLEEP_ASLEEP per bucket.
+    """
+    bucket_expr = {
+        "hour": "substr(date_from, 1, 13)",
+        "day": "substr(date_from, 1, 10)",
+        "week": "strftime('%Y-W%W', date_from)",
+        "month": "substr(date_from, 1, 7)",
+    }
+    group_expr = bucket_expr.get(bucket, bucket_expr["day"])
+    dur = _duration_seconds()
+
+    per_bucket: dict[str, dict[str, float]] = {}
+    for sleep_type in ("SLEEP_SESSION", "SLEEP_ASLEEP"):
+        clauses = ["type = ?"]
+        params: list = [sleep_type]
+        if start_date:
+            clauses.append("date_from >= ?")
+            params.append(start_date)
+        if end_date:
+            clauses.append("date_from <= ?")
+            params.append(end_date + "T23:59:59")
+        sql = f"""
+            SELECT {group_expr}, SUM({dur})
+            FROM records
+            WHERE {' AND '.join(clauses)}
+            GROUP BY {group_expr}
+            ORDER BY {group_expr}
+        """
+        with get_conn() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        for b, s in rows:
+            per_bucket.setdefault(b, {})[sleep_type] = s or 0
+
+    result = []
+    for b in sorted(per_bucket):
+        d = per_bucket[b]
+        seconds = d.get("SLEEP_SESSION") or d.get("SLEEP_ASLEEP") or 0
+        result.append({"bucket": b, "hours": round(seconds / 3600, 1)})
+    return result
