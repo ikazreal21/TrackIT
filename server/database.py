@@ -82,19 +82,57 @@ def _build_type_filter(types: list[str] | None) -> tuple[str, list]:
     return f"WHERE type IN ({placeholders})", list(types)
 
 
+def _tz_minutes(tz_offset: int | None) -> int:
+    """Sanitise a viewer timezone offset (minutes east of UTC)."""
+    try:
+        mins = int(tz_offset or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(-840, min(840, mins))
+
+
+def _shifted(col: str, tz_offset: int | None) -> str:
+    """Column expression shifted into the viewer's timezone.
+
+    tz_offset=0 (default) leaves data in UTC — behaviour unchanged.
+    """
+    mins = _tz_minutes(tz_offset)
+    if not mins:
+        return col
+    sign = "+" if mins >= 0 else "-"
+    return f"datetime({col}, '{sign}{abs(mins)} minutes')"
+
+
+def _day_col(tz_offset: int | None) -> str:
+    """Local calendar-day expression used for range filtering."""
+    return f"substr({_shifted('date_from', tz_offset)}, 1, 10)"
+
+
 def _build_date_filter(
-    start_date: str | None, end_date: str | None, existing_where: str = ""
+    start_date: str | None,
+    end_date: str | None,
+    existing_where: str = "",
+    tz_offset: int | None = 0,
 ) -> tuple[str, list]:
     clauses = []
     params: list = []
     if existing_where:
         clauses.append(existing_where)
-    if start_date:
-        clauses.append("date_from >= ?")
-        params.append(start_date)
-    if end_date:
-        clauses.append("date_from <= ?")
-        params.append(end_date + "T23:59:59")
+    if _tz_minutes(tz_offset):
+        day = _day_col(tz_offset)
+        if start_date:
+            clauses.append(f"{day} >= ?")
+            params.append(start_date)
+        if end_date:
+            clauses.append(f"{day} <= ?")
+            params.append(end_date)
+    else:
+        if start_date:
+            clauses.append("date_from >= ?")
+            params.append(start_date)
+        if end_date:
+            clauses.append("date_from <= ?")
+            params.append(end_date + "T23:59:59")
     if not clauses:
         return "", []
     return "WHERE " + " AND ".join(clauses), params
@@ -105,9 +143,12 @@ def query_records(
     limit: int = 1000,
     start_date: str | None = None,
     end_date: str | None = None,
+    tz_offset: int | None = 0,
 ) -> list[dict]:
     type_where, type_params = _build_type_filter(types)
-    date_where, date_params = _build_date_filter(start_date, end_date, type_where)
+    date_where, date_params = _build_date_filter(
+        start_date, end_date, type_where, tz_offset
+    )
 
     sql = f"SELECT id, source, type, value, unit, date_from, date_to FROM records {date_where} ORDER BY date_from DESC LIMIT ?"
     params = type_params + date_params + [limit]
@@ -133,9 +174,12 @@ def summary(
     group_by: str = "type",
     start_date: str | None = None,
     end_date: str | None = None,
+    tz_offset: int | None = 0,
 ) -> list[dict]:
     type_where, type_params = _build_type_filter(types)
-    date_where, date_params = _build_date_filter(start_date, end_date, type_where)
+    date_where, date_params = _build_date_filter(
+        start_date, end_date, type_where, tz_offset
+    )
 
     sql = f"""
         SELECT {group_by}, COUNT(*), SUM(value), AVG(value), MIN(value), MAX(value)
@@ -162,29 +206,59 @@ def summary(
     ]
 
 
+def _bucket_exprs(tz_offset: int | None) -> dict[str, str]:
+    shifted = _shifted("date_from", tz_offset)
+    return {
+        "hour": f"substr({shifted}, 1, 13)",
+        "day": f"substr({shifted}, 1, 10)",
+        "week": f"strftime('%Y-W%W', {shifted})",
+        "month": f"substr({shifted}, 1, 7)",
+    }
+
+
+def _range_clauses(
+    start_date: str | None,
+    end_date: str | None,
+    tz_offset: int | None,
+) -> tuple[list[str], list]:
+    """Date-range clauses over the viewer's local calendar day."""
+    clauses: list[str] = []
+    params: list = []
+    if _tz_minutes(tz_offset):
+        day = _day_col(tz_offset)
+        if start_date:
+            clauses.append(f"{day} >= ?")
+            params.append(start_date)
+        if end_date:
+            clauses.append(f"{day} <= ?")
+            params.append(end_date)
+    else:
+        if start_date:
+            clauses.append("date_from >= ?")
+            params.append(start_date)
+        if end_date:
+            clauses.append("date_from <= ?")
+            params.append(end_date + "T23:59:59")
+    return clauses, params
+
+
 def timeseries(
     record_type: str,
     bucket: str = "day",
     start_date: str | None = None,
     end_date: str | None = None,
+    tz_offset: int | None = 0,
 ) -> list[dict]:
-    bucket_expr = {
-        "hour": "substr(date_from, 1, 13)",
-        "day": "substr(date_from, 1, 10)",
-        "week": "strftime('%Y-W%W', date_from)",
-        "month": "substr(date_from, 1, 7)",
-    }
-    group_expr = bucket_expr.get(bucket, bucket_expr["day"])
+    group_expr = _bucket_exprs(tz_offset).get(
+        bucket, _bucket_exprs(tz_offset)["day"]
+    )
 
     clauses = ["type = ?"]
     params: list = [record_type]
 
-    if start_date:
-        clauses.append("date_from >= ?")
-        params.append(start_date)
-    if end_date:
-        clauses.append("date_from <= ?")
-        params.append(end_date + "T23:59:59")
+    extra, extra_params = _range_clauses(start_date, end_date, tz_offset)
+    clauses.extend(extra)
+    params.extend(extra_params)
 
     date_where = "WHERE " + " AND ".join(clauses)
 
@@ -241,6 +315,7 @@ def sleep_summary(
     bucket: str = "day",
     start_date: str | None = None,
     end_date: str | None = None,
+    tz_offset: int | None = 0,
 ) -> list[dict]:
     """Sleep hours per bucket, computed from record intervals.
 
@@ -248,25 +323,17 @@ def sleep_summary(
     so durations are derived from date_to - date_from instead of value.
     Prefers SLEEP_SESSION; falls back to SLEEP_ASLEEP per bucket.
     """
-    bucket_expr = {
-        "hour": "substr(date_from, 1, 13)",
-        "day": "substr(date_from, 1, 10)",
-        "week": "strftime('%Y-W%W', date_from)",
-        "month": "substr(date_from, 1, 7)",
-    }
-    group_expr = bucket_expr.get(bucket, bucket_expr["day"])
+    exprs = _bucket_exprs(tz_offset)
+    group_expr = exprs.get(bucket, exprs["day"])
     dur = _duration_seconds()
 
     per_bucket: dict[str, dict[str, float]] = {}
     for sleep_type in ("SLEEP_SESSION", "SLEEP_ASLEEP"):
         clauses = ["type = ?"]
         params: list = [sleep_type]
-        if start_date:
-            clauses.append("date_from >= ?")
-            params.append(start_date)
-        if end_date:
-            clauses.append("date_from <= ?")
-            params.append(end_date + "T23:59:59")
+        extra, extra_params = _range_clauses(start_date, end_date, tz_offset)
+        clauses.extend(extra)
+        params.extend(extra_params)
         sql = f"""
             SELECT {group_expr}, SUM({dur})
             FROM records

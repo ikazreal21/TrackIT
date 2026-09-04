@@ -63,10 +63,13 @@ def list_records(
     limit: int = 1000,
     start_date: str | None = None,
     end_date: str | None = None,
+    tz: int = 0,
 ):
     type_list = types.split(",") if types else None
     return {
-        "records": database.query_records(type_list, limit, start_date, end_date)
+        "records": database.query_records(
+            type_list, limit, start_date, end_date, tz
+        )
     }
 
 
@@ -76,9 +79,14 @@ def summary(
     group_by: str = "type",
     start_date: str | None = None,
     end_date: str | None = None,
+    tz: int = 0,
 ):
     type_list = types.split(",") if types else None
-    return {"summary": database.summary(type_list, group_by, start_date, end_date)}
+    return {
+        "summary": database.summary(
+            type_list, group_by, start_date, end_date, tz
+        )
+    }
 
 
 @app.get("/api/summary/daily")
@@ -86,11 +94,12 @@ def summary_daily(
     types: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    tz: int = 0,
 ):
     type_list = types.split(",") if types else None
     return {
         "summary": database.summary(
-            type_list, "substr(date_from, 1, 10)", start_date, end_date
+            type_list, "substr(date_from, 1, 10)", start_date, end_date, tz
         )
     }
 
@@ -101,11 +110,14 @@ def timeseries(
     bucket: str = "day",
     start_date: str | None = None,
     end_date: str | None = None,
+    tz: int = 0,
 ):
     return {
         "type": record_type,
         "bucket": bucket,
-        "data": database.timeseries(record_type, bucket, start_date, end_date),
+        "data": database.timeseries(
+            record_type, bucket, start_date, end_date, tz
+        ),
     }
 
 
@@ -119,6 +131,9 @@ def sleep(
     bucket: str = "day",
     start_date: str | None = None,
     end_date: str | None = None,
+    tz: int = 0,
 ):
     """Sleep hours per bucket, derived from record intervals."""
-    return {"data": database.sleep_summary(bucket, start_date, end_date)}
+    return {
+        "data": database.sleep_summary(bucket, start_date, end_date, tz)
+    }

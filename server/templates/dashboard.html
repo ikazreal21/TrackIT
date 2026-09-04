@@ -13,191 +13,89 @@
 </head>
 <body>
     <div class="app-container">
-        <header class="app-header">
-            <div class="header-left">
-                <img src="/static/logo.png" alt="TrackIT" class="header-logo">
-                <div class="header-text">
-                    <h1>TrackIT</h1>
-                    <p class="header-subtitle" id="dateRangeLabel">Loading...</p>
-                </div>
+        <header class="topbar">
+            <div class="brand">
+                <div class="avatar"><img src="/static/logo.png" alt="TrackIT"></div>
+                <span class="pill">Local</span>
             </div>
-            <div class="header-right">
+            <div class="controls">
                 <div class="range-selector" id="rangeSelector">
                     <button class="range-btn" data-range="day">Day</button>
                     <button class="range-btn active" data-range="week">Week</button>
                     <button class="range-btn" data-range="month">Month</button>
                     <button class="range-btn" data-range="custom">Custom</button>
                 </div>
-                <div class="date-picker-group" id="datePickerGroup" style="display: none;">
+                <div class="date-picker-group" id="datePickerGroup" hidden>
                     <input type="date" id="startDate" class="date-input">
                     <span class="date-separator">to</span>
                     <input type="date" id="endDate" class="date-input">
                 </div>
-                <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
-                    <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-                    </svg>
-                    <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                    </svg>
-                </button>
             </div>
         </header>
 
-        <div class="metrics-row" id="metricsRow">
-            <div class="metric-card" data-type="HEART_RATE">
-                <div class="metric-top">
-                    <div class="metric-icon heart">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                    </div>
-                    <span class="metric-label">Heart Rate</span>
-                </div>
-                <div class="metric-value-row">
-                    <span class="metric-value" id="hrValue">--</span>
-                    <span class="metric-unit">bpm</span>
-                </div>
-                <div class="metric-meta">
-                    <span class="metric-range-label">Range</span>
-                    <span class="metric-range-val" id="hrRange">-- --</span>
-                </div>
-                <div class="sparkline-container">
-                    <canvas id="hrSparkline"></canvas>
-                </div>
-            </div>
+        <p class="dateline"><span id="dateLine">Today</span><span class="dot-sep"></span><span id="recordStats"></span></p>
 
-            <div class="metric-card" data-type="STEPS">
-                <div class="metric-top">
-                    <div class="metric-icon steps">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/></svg>
-                    </div>
-                    <span class="metric-label">Steps</span>
-                </div>
-                <div class="metric-value-row">
-                    <span class="metric-value" id="stepsValue">--</span>
-                    <span class="metric-unit">steps</span>
-                </div>
-                <div class="metric-meta">
-                    <span class="metric-range-label">Daily avg</span>
-                    <span class="metric-range-val" id="stepsAvg">--</span>
-                </div>
-                <div class="sparkline-container">
-                    <canvas id="stepsSparkline"></canvas>
-                </div>
+        <section class="card balance">
+            <div class="balance-rings" id="balanceRings"></div>
+            <div class="balance-stats">
+                <div class="balance-status" id="balanceStatus">No data yet</div>
+                <div class="balance-sub">Today at a glance</div>
+                <div class="mini-stat"><span class="mdot" style="background:#2FE0A8"></span>Steps<span class="mval" id="miniSteps">--</span></div>
+                <div class="mini-stat"><span class="mdot" style="background:#F6915A"></span>Active kcal<span class="mval" id="miniCal">--</span></div>
+                <div class="mini-stat"><span class="mdot" style="background:#7C8CF8"></span>Avg HR<span class="mval" id="miniHr">--</span></div>
             </div>
+        </section>
 
-            <div class="metric-card" data-type="CALORIES">
-                <div class="metric-top">
-                    <div class="metric-icon calories">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39.89.69 1.78.69 2.58 0 3.14-2.81 6.26-4.9 6.26zM13.5 1c0 2.76-2.81 5.26-4.9 6.26-.39-.89-.69-1.78-.69-2.58C7.91 1.54 10.72 1 13.5 1z"/></svg>
-                    </div>
-                    <span class="metric-label">Calories</span>
-                </div>
-                <div class="metric-value-row">
-                    <span class="metric-value" id="caloriesValue">--</span>
-                    <span class="metric-unit">kcal</span>
-                </div>
-                <div class="metric-meta">
-                    <span class="metric-range-label">Daily avg</span>
-                    <span class="metric-range-val" id="caloriesAvg">--</span>
-                </div>
-                <div class="sparkline-container">
-                    <canvas id="caloriesSparkline"></canvas>
-                </div>
+        <section class="scores">
+            <div class="card score-card" id="sleepCard">
+                <div class="score-title">Sleep <span class="chev">›</span></div>
+                <div class="gauge-wrap" id="sleepGauge"></div>
+                <div class="score-status" id="sleepStatus">No data</div>
+                <p class="score-insight" id="sleepInsight"></p>
             </div>
+            <div class="card score-card" id="strainCard">
+                <div class="score-title">Strain <span class="chev">›</span></div>
+                <div class="gauge-wrap" id="strainGauge"></div>
+                <div class="score-status" id="strainStatus">No data</div>
+                <p class="score-insight" id="strainInsight"></p>
+            </div>
+        </section>
 
-            <div class="metric-card" data-type="SLEEP">
-                <div class="metric-top">
-                    <div class="metric-icon sleep">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.34 2.02C6.59 1.82 2 6.42 2 12c0 5.52 4.48 10 10 10 3.71 0 6.93-2.02 8.66-5.02-7.51-.25-12.09-7.99-8.32-14.96z"/></svg>
-                    </div>
-                    <span class="metric-label">Sleep</span>
-                </div>
-                <div class="metric-value-row">
-                    <span class="metric-value" id="sleepValue">--</span>
-                    <span class="metric-unit">hrs</span>
-                </div>
-                <div class="metric-meta">
-                    <span class="metric-range-label">Avg/night</span>
-                    <span class="metric-range-val" id="sleepAvg">--</span>
-                </div>
-                <div class="sparkline-container">
-                    <canvas id="sleepSparkline"></canvas>
-                </div>
-            </div>
-        </div>
+        <section class="card panel wide">
+            <div class="panel-head"><h2>Sleep Analysis</h2><span class="panel-sub" id="sleepSpan"></span></div>
+            <div id="hypno"></div>
+            <div class="axis" id="hypnoAxis"></div>
+            <div id="stageRows"></div>
+        </section>
 
-        <div class="charts-grid">
-            <div class="chart-panel wide">
-                <div class="chart-header">
-                    <h2 class="chart-title">Heart Rate Trend</h2>
-                    <div class="chart-legend" id="hrLegend"></div>
-                </div>
-                <div class="chart-body">
-                    <canvas id="hrChart"></canvas>
-                </div>
-            </div>
+        <section class="card panel wide">
+            <div class="panel-head"><h2>Heart Rate Trend</h2></div>
+            <div class="chart-body tall"><canvas id="hrChart"></canvas></div>
+        </section>
 
-            <div class="chart-panel">
-                <div class="chart-header">
-                    <h2 class="chart-title">Steps & Distance</h2>
-                </div>
-                <div class="chart-body">
-                    <canvas id="stepsChart"></canvas>
-                </div>
+        <section class="grid2">
+            <div class="card panel">
+                <div class="panel-head"><h2>Steps &amp; Distance</h2></div>
+                <div class="chart-body"><canvas id="stepsChart"></canvas></div>
             </div>
+            <div class="card panel">
+                <div class="panel-head"><h2>Calories</h2></div>
+                <div class="chart-body"><canvas id="caloriesChart"></canvas></div>
+            </div>
+            <div class="card panel">
+                <div class="panel-head"><h2>Weight</h2></div>
+                <div class="chart-body"><canvas id="weightChart"></canvas></div>
+            </div>
+            <div class="card panel">
+                <div class="panel-head"><h2>Data Distribution</h2></div>
+                <div class="chart-body"><canvas id="distributionChart"></canvas></div>
+            </div>
+        </section>
 
-            <div class="chart-panel">
-                <div class="chart-header">
-                    <h2 class="chart-title">Calories Burned</h2>
-                </div>
-                <div class="chart-body">
-                    <canvas id="caloriesChart"></canvas>
-                </div>
-            </div>
-
-            <div class="chart-panel">
-                <div class="chart-header">
-                    <h2 class="chart-title">Sleep Analysis</h2>
-                </div>
-                <div class="chart-body">
-                    <canvas id="sleepChart"></canvas>
-                </div>
-            </div>
-
-            <div class="chart-panel">
-                <div class="chart-header">
-                    <h2 class="chart-title">Weight Trend</h2>
-                </div>
-                <div class="chart-body">
-                    <canvas id="weightChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="bottom-grid">
-            <div class="chart-panel">
-                <div class="chart-header">
-                    <h2 class="chart-title">Data Distribution</h2>
-                </div>
-                <div class="chart-body donut-body">
-                    <canvas id="distributionChart"></canvas>
-                </div>
-            </div>
-
-            <div class="recent-panel">
-                <div class="chart-header">
-                    <h2 class="chart-title">Recent Records</h2>
-                    <span class="record-count" id="recordCount">0 records</span>
-                </div>
-                <div class="records-list" id="recordsList">
-                    <div class="empty-state">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                        <p>No data yet</p>
-                        <span>Sync from your phone to see records here</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <section class="card panel wide">
+            <div class="panel-head"><h2>Recent Records</h2><span class="panel-sub" id="recordCount"></span></div>
+            <div class="records-list" id="recordsList"></div>
+        </section>
 
         <footer class="app-footer">
             <a href="/docs">API Docs</a>

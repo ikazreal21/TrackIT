@@ -1,84 +1,74 @@
 const COLORS = {
-    gold: '#E8B44A',
-    blue: '#38BDF8',
+    teal: '#2FE0A8',
+    orange: '#F6915A',
+    peri: '#8B93B8',
+    ringBlue: '#7C8CF8',
     green: '#4ADE80',
-    red: '#F87171',
-    violet: '#A78BFA',
-    orange: '#FB923C',
-    goldDim: 'rgba(232, 180, 74, 0.15)',
-    blueDim: 'rgba(56, 189, 248, 0.12)',
-    greenDim: 'rgba(74, 222, 128, 0.12)',
-    redDim: 'rgba(248, 113, 113, 0.12)',
-    violetDim: 'rgba(167, 139, 250, 0.12)',
-    orangeDim: 'rgba(251, 146, 60, 0.12)',
+    track: 'rgba(255, 255, 255, 0.15)',
+    tealDim: 'rgba(47, 224, 168, 0.12)',
+    orangeDim: 'rgba(246, 145, 90, 0.12)',
+    periDim: 'rgba(139, 147, 184, 0.14)',
+    blueDim: 'rgba(124, 140, 248, 0.12)',
 };
 
 const TYPE_COLORS = {
-    HEART_RATE: COLORS.red,
-    STEPS: COLORS.green,
-    DISTANCE_DELTA: COLORS.blue,
+    HEART_RATE: COLORS.orange,
+    STEPS: COLORS.teal,
+    DISTANCE_DELTA: COLORS.ringBlue,
     ACTIVE_ENERGY_BURNED: COLORS.orange,
     TOTAL_CALORIES_BURNED: COLORS.orange,
-    BASAL_ENERGY_BURNED: COLORS.gold,
-    SLEEP_SESSION: COLORS.violet,
-    SLEEP_ASLEEP: COLORS.violet,
-    SLEEP_LIGHT: 'rgba(167, 139, 250, 0.6)',
-    SLEEP_DEEP: 'rgba(167, 139, 250, 0.85)',
-    SLEEP_REM: 'rgba(167, 139, 250, 0.4)',
-    WEIGHT: COLORS.blue,
-    HEIGHT: COLORS.blue,
-};
-
-const TYPE_DOT_CLASS = {
-    HEART_RATE: 'heart',
-    STEPS: 'steps',
-    ACTIVE_ENERGY_BURNED: 'calories',
-    TOTAL_CALORIES_BURNED: 'calories',
-    BASAL_ENERGY_BURNED: 'calories',
-    SLEEP_SESSION: 'sleep',
-    SLEEP_ASLEEP: 'sleep',
-    SLEEP_LIGHT: 'sleep',
-    SLEEP_DEEP: 'sleep',
-    SLEEP_REM: 'sleep',
-    WEIGHT: 'weight',
-    DISTANCE_DELTA: 'distance',
+    BASAL_ENERGY_BURNED: COLORS.orange,
+    SLEEP_SESSION: COLORS.peri,
+    SLEEP_ASLEEP: COLORS.peri,
+    SLEEP_LIGHT: COLORS.peri,
+    SLEEP_DEEP: '#3F4A9E',
+    SLEEP_REM: '#6C7BD6',
+    SLEEP_AWAKE: '#E8EAF2',
+    WEIGHT: COLORS.teal,
+    HEIGHT: '#7A7A84',
 };
 
 const TYPE_LABELS = {
-    HEART_RATE: 'Heart Rate',
+    HEART_RATE: 'Heart rate',
     STEPS: 'Steps',
     DISTANCE_DELTA: 'Distance',
-    ACTIVE_ENERGY_BURNED: 'Active Calories',
-    TOTAL_CALORIES_BURNED: 'Total Calories',
-    BASAL_ENERGY_BURNED: 'Basal Calories',
+    ACTIVE_ENERGY_BURNED: 'Active calories',
+    TOTAL_CALORIES_BURNED: 'Total calories',
+    BASAL_ENERGY_BURNED: 'Basal calories',
     SLEEP_SESSION: 'Sleep',
     SLEEP_ASLEEP: 'Asleep',
-    SLEEP_LIGHT: 'Light Sleep',
-    SLEEP_DEEP: 'Deep Sleep',
-    SLEEP_REM: 'REM Sleep',
+    SLEEP_LIGHT: 'Light',
+    SLEEP_DEEP: 'Deep',
+    SLEEP_REM: 'REM',
+    SLEEP_AWAKE: 'Awake',
     WEIGHT: 'Weight',
     HEIGHT: 'Height',
 };
 
+const STAGE_ORDER = ['SLEEP_AWAKE', 'SLEEP_LIGHT', 'SLEEP_REM', 'SLEEP_DEEP', 'SLEEP_ASLEEP'];
+const SLEEP_TYPES = ['SLEEP_SESSION', 'SLEEP_ASLEEP', 'SLEEP_LIGHT', 'SLEEP_DEEP', 'SLEEP_REM', 'SLEEP_AWAKE'];
+
 let currentRange = 'week';
 let charts = {};
 
-const themeToggle = document.getElementById('themeToggle');
-const savedTheme = localStorage.getItem('trackit-theme');
-if (savedTheme === 'light') {
-    document.body.classList.add('light');
-} else if (!savedTheme && window.matchMedia('(prefers-color-scheme: light)').matches) {
-    document.body.classList.add('light');
+function localISODate(d) {
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return d.getFullYear() + '-' + m + '-' + day;
 }
 
-themeToggle.addEventListener('click', () => {
-    document.body.classList.toggle('light');
-    const isLight = document.body.classList.contains('light');
-    localStorage.setItem('trackit-theme', isLight ? 'light' : 'dark');
-    Object.values(charts).forEach(c => c && c.destroy());
-    charts = {};
-    loadDashboard();
-});
+function parseLocalDate(s) {
+    const parts = s.split('-').map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function shiftISO(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return localISODate(d);
+}
+
+const TZ_MIN = -new Date().getTimezoneOffset();
 
 document.getElementById('rangeSelector').addEventListener('click', (e) => {
     const btn = e.target.closest('.range-btn');
@@ -86,52 +76,42 @@ document.getElementById('rangeSelector').addEventListener('click', (e) => {
     document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     currentRange = btn.dataset.range;
-
-    const datePickerGroup = document.getElementById('datePickerGroup');
-    if (currentRange === 'custom') {
-        datePickerGroup.style.display = 'flex';
-        initDatePickers();
-    } else {
-        datePickerGroup.style.display = 'none';
-        loadDashboard();
-    }
+    document.getElementById('datePickerGroup').hidden = currentRange !== 'custom';
+    if (currentRange === 'custom') initDatePickers();
+    loadDashboard();
 });
 
 function initDatePickers() {
     const startInput = document.getElementById('startDate');
     const endInput = document.getElementById('endDate');
-
     if (!startInput.value) {
         const now = new Date();
         const weekAgo = new Date(now);
         weekAgo.setDate(weekAgo.getDate() - 6);
-        startInput.value = weekAgo.toISOString().slice(0, 10);
-        endInput.value = now.toISOString().slice(0, 10);
+        startInput.value = localISODate(weekAgo);
+        endInput.value = localISODate(now);
     }
-
     startInput.onchange = () => loadDashboard();
     endInput.onchange = () => loadDashboard();
 }
 
 function getDateRange(range) {
     const now = new Date();
-    const end = now.toISOString().slice(0, 10);
+    const end = localISODate(now);
     let start;
     if (range === 'day') {
         start = end;
     } else if (range === 'week') {
         const d = new Date(now);
         d.setDate(d.getDate() - 6);
-        start = d.toISOString().slice(0, 10);
+        start = localISODate(d);
     } else if (range === 'month') {
         const d = new Date(now);
         d.setDate(d.getDate() - 29);
-        start = d.toISOString().slice(0, 10);
+        start = localISODate(d);
     } else if (range === 'custom') {
-        const startInput = document.getElementById('startDate');
-        const endInput = document.getElementById('endDate');
-        start = startInput.value || end;
-        return { start, end: endInput.value || end };
+        start = document.getElementById('startDate').value || end;
+        return { start, end: document.getElementById('endDate').value || end };
     }
     return { start, end };
 }
@@ -141,18 +121,7 @@ function getBucket(range) {
     return 'day';
 }
 
-function getChartColors() {
-    const isLight = document.body.classList.contains('light');
-    return {
-        text: isLight ? '#5A6A82' : '#8B9DC3',
-        grid: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)',
-        tooltipBg: isLight ? '#1A2233' : '#F1F5F9',
-        tooltipText: isLight ? '#F1F5F9' : '#1A2233',
-    };
-}
-
 function chartDefaults() {
-    const c = getChartColors();
     return {
         responsive: true,
         maintainAspectRatio: false,
@@ -160,10 +129,10 @@ function chartDefaults() {
         plugins: {
             legend: { display: false },
             tooltip: {
-                backgroundColor: c.tooltipBg,
-                titleColor: c.tooltipText,
-                bodyColor: c.tooltipText,
-                borderColor: 'rgba(128,128,128,0.2)',
+                backgroundColor: '#F2F2F4',
+                titleColor: '#141417',
+                bodyColor: '#141417',
+                borderColor: 'rgba(0,0,0,0.15)',
                 borderWidth: 1,
                 cornerRadius: 8,
                 padding: 10,
@@ -174,69 +143,187 @@ function chartDefaults() {
                 callbacks: {
                     label: function(ctx) {
                         const val = ctx.parsed.y;
-                        const rounded = Math.round(val * 10) / 10;
-                        return ctx.dataset.label + ': ' + rounded.toLocaleString();
+                        return ctx.dataset.label + ': ' + (Math.round(val * 10) / 10).toLocaleString();
                     }
                 }
             },
         },
         scales: {
             x: {
-                ticks: { color: c.text, font: { family: "'JetBrains Mono'", size: 10 }, maxTicksLimit: 8 },
+                ticks: { color: '#7A7A84', font: { family: "'JetBrains Mono'", size: 10 }, maxTicksLimit: 8 },
                 grid: { display: false },
                 border: { display: false },
             },
             y: {
                 ticks: {
-                    color: c.text,
+                    color: '#7A7A84',
                     font: { family: "'JetBrains Mono'", size: 10 },
                     maxTicksLimit: 5,
                     callback: function(val) { return Math.round(val * 10) / 10; }
                 },
-                grid: { color: c.grid, drawBorder: false },
+                grid: { color: 'rgba(255,255,255,0.06)', drawBorder: false },
                 border: { display: false },
             },
         },
     };
 }
 
-async function loadDashboard() {
-    const { start, end } = getDateRange(currentRange);
-    const bucket = getBucket(currentRange);
+function legendLabels() {
+    return {
+        color: '#7A7A84',
+        font: { family: "'Space Grotesk'", size: 11 },
+        boxWidth: 12,
+        boxHeight: 12,
+        padding: 16,
+        usePointStyle: true,
+        pointStyle: 'circle',
+    };
+}
 
-    document.getElementById('dateRangeLabel').textContent = formatDateRange(start, end);
+function sleepScore(hours) {
+    if (hours == null || hours <= 0) return null;
+    if (hours > 9) return Math.max(0, Math.min(100, 100 - (hours - 9) * 15));
+    return Math.max(0, Math.min(100, hours / 8 * 100));
+}
+
+function strainScore(steps, activeCal) {
+    if (!steps && !activeCal) return null;
+    return Math.max(0, Math.min(100, steps / 12000 * 60 + activeCal / 600 * 40));
+}
+
+function recoveryScore(sleep, strain) {
+    if (sleep == null && strain == null) return null;
+    if (sleep == null) return Math.max(0, Math.min(100, 100 - strain));
+    if (strain == null) return sleep;
+    return Math.max(0, Math.min(100, sleep * 0.65 + (100 - strain) * 0.35));
+}
+
+function deltaPct(current, baseline) {
+    if (current == null || baseline == null || baseline === 0) return null;
+    return (current - baseline) / baseline * 100;
+}
+
+function bandFor(score) {
+    if (score >= 85) return 'Optimal';
+    if (score >= 70) return 'Good';
+    if (score >= 55) return 'Fair';
+    return 'Poor';
+}
+
+function sleepInsight(score) {
+    if (score == null) return 'No sleep recorded yet.';
+    if (score >= 85) return 'Your sleep quality was excellent last night. Keep up your good sleep habits.';
+    if (score >= 70) return 'Solid night. A slightly earlier bedtime could push this higher.';
+    if (score >= 55) return 'Below your usual. Watch late screens and caffeine today.';
+    return 'Rough night. Prioritize an early bedtime to recover.';
+}
+
+function strainInsight(score) {
+    if (score == null) return 'No activity recorded yet.';
+    if (score >= 85) return 'Big day of training. Fuel up and sleep well tonight.';
+    if (score >= 70) return 'Strong output today. Keep the momentum going.';
+    if (score >= 55) return 'Moderate day. A walk or short session fits well.';
+    return 'Your strain level is low today. Consider taking it easy and prioritize recovery.';
+}
+
+function gaugeSVG(value01, color) {
+    const dash = value01 == null ? '0 100' : (75 * Math.max(0, Math.min(1, value01))).toFixed(1) + ' 100';
+    return '<svg viewBox="0 0 200 200" width="190" height="190">'
+        + '<circle cx="100" cy="100" r="80" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="13" stroke-linecap="round" pathLength="100" stroke-dasharray="75 100" transform="rotate(135 100 100)"/>'
+        + '<circle cx="100" cy="100" r="80" fill="none" stroke="' + color + '" stroke-width="13" stroke-linecap="round" pathLength="100" stroke-dasharray="' + dash + '" transform="rotate(135 100 100)"/>'
+        + '</svg>';
+}
+
+function gaugeCenter(score, delta, color) {
+    const scoreHtml = score == null
+        ? '<div class="gauge-score" style="color:#7A7A84">--</div>'
+        : '<div class="gauge-score" style="color:' + color + '">' + Math.round(score) + '</div>';
+    const deltaHtml = delta == null ? '' :
+        '<div class="gauge-delta">' + (delta >= 0 ? '&#8593;' : '&#8595;') + ' ' + Math.abs(Math.round(delta)) + '%</div>'
+        + '<div class="gauge-cap">vs 7-day avg</div>';
+    return '<div class="gauge-center">' + scoreHtml + deltaHtml + '</div>';
+}
+
+function ringsSVG(sleep, strain, recovery) {
+    const ring = (r, v, color) => {
+        const dash = v == null ? '0 100' : (100 * Math.max(0, Math.min(1, v))).toFixed(1) + ' 100';
+        return '<circle cx="75" cy="75" r="' + r + '" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="100 100" transform="rotate(-90 75 75)"/>'
+            + '<circle cx="75" cy="75" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="' + dash + '" transform="rotate(-90 75 75)"/>';
+    };
+    return '<svg viewBox="0 0 150 150" width="150" height="150">'
+        + ring(64, sleep == null ? null : sleep / 100, COLORS.teal)
+        + ring(45, strain == null ? null : strain / 100, COLORS.orange)
+        + ring(26, recovery == null ? null : recovery / 100, COLORS.ringBlue)
+        + '</svg>';
+}
+
+function fmtInt(v) { return Math.round(v).toLocaleString(); }
+
+function fmt1(v) {
+    const r = Math.round(v * 10) / 10;
+    return r % 1 === 0 ? r.toString() : r.toFixed(1);
+}
+
+function fmtDur(secs) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.round((secs % 3600) / 60);
+    if (h === 0) return m + ' min';
+    return h + 'h ' + String(m).padStart(2, '0') + ' min';
+}
+
+async function getJSON(url) {
+    const res = await fetch(url);
+    return res.json();
+}
+
+async function loadDashboard() {
+    const range = getDateRange(currentRange);
+    const start = range.start;
+    const end = range.end;
+    const bucket = getBucket(currentRange);
+    const tz = '&tz=' + TZ_MIN;
+    const q = 'start_date=' + start + '&end_date=' + end + tz;
+
+    document.getElementById('dateLine').textContent = formatDateRange(start, end);
 
     try {
-        const [summaryRes, recordsRes, hrTs, stepsTs, distTs, calTs, totalCalTs, sleepTs, weightTs] = await Promise.all([
-            fetch(`/api/summary?start_date=${start}&end_date=${end}`),
-            fetch(`/api/records?limit=50&start_date=${start}&end_date=${end}`),
-            fetch(`/api/timeseries/HEART_RATE?bucket=${bucket}&start_date=${start}&end_date=${end}`),
-            fetch(`/api/timeseries/STEPS?bucket=${bucket}&start_date=${start}&end_date=${end}`),
-            fetch(`/api/timeseries/DISTANCE_DELTA?bucket=${bucket}&start_date=${start}&end_date=${end}`),
-            fetch(`/api/timeseries/ACTIVE_ENERGY_BURNED?bucket=${bucket}&start_date=${start}&end_date=${end}`),
-            fetch(`/api/timeseries/TOTAL_CALORIES_BURNED?bucket=${bucket}&start_date=${start}&end_date=${end}`),
-            fetch(`/api/sleep?bucket=${bucket}&start_date=${start}&end_date=${end}`),
-            fetch(`/api/timeseries/WEIGHT?bucket=${bucket}&start_date=${start}&end_date=${end}`),
-        ]);
-
-        const [summaryData, recordsData, hrData, stepsData, distData, calData, totalCalData, sleepData, weightData] = await Promise.all([
-            summaryRes.json(),
-            recordsRes.json(),
-            hrTs.json(),
-            stepsTs.json(),
-            distTs.json(),
-            calTs.json(),
-            totalCalTs.json(),
-            sleepTs.json(),
-            weightTs.json(),
+        const today = localISODate(new Date());
+        const week8 = shiftISO(-7);
+        const night9 = shiftISO(-8);
+        const [
+            summaryData, recordsData, hrData, stepsData, distData,
+            calData, totalCalData, sleepData, weightData,
+            scoreSleep, scoreSteps, scoreCal, scoreHr, sleepSegs
+        ] = await Promise.all([
+            getJSON('/api/summary?' + q),
+            getJSON('/api/records?limit=50&' + q),
+            getJSON('/api/timeseries/HEART_RATE?bucket=' + bucket + '&' + q),
+            getJSON('/api/timeseries/STEPS?bucket=' + bucket + '&' + q),
+            getJSON('/api/timeseries/DISTANCE_DELTA?bucket=' + bucket + '&' + q),
+            getJSON('/api/timeseries/ACTIVE_ENERGY_BURNED?bucket=' + bucket + '&' + q),
+            getJSON('/api/timeseries/TOTAL_CALORIES_BURNED?bucket=' + bucket + '&' + q),
+            getJSON('/api/sleep?bucket=' + bucket + '&' + q),
+            getJSON('/api/timeseries/WEIGHT?bucket=' + bucket + '&' + q),
+            getJSON('/api/sleep?bucket=day&start_date=' + night9 + '&end_date=' + today + tz),
+            getJSON('/api/timeseries/STEPS?bucket=day&start_date=' + week8 + '&end_date=' + today + tz),
+            getJSON('/api/timeseries/ACTIVE_ENERGY_BURNED?bucket=day&start_date=' + week8 + '&end_date=' + today + tz),
+            getJSON('/api/timeseries/HEART_RATE?bucket=day&start_date=' + week8 + '&end_date=' + today + tz),
+            getJSON('/api/records?types=' + SLEEP_TYPES.join(',') + '&limit=1000&start_date=' + shiftISO(-1) + '&end_date=' + today + tz),
         ]);
 
         const typeSummary = summaryData.summary || [];
         const records = recordsData.records || [];
 
-        updateMetricCards(typeSummary, hrData.data || [], stepsData.data || [], calData.data || [], totalCalData.data || [], sleepData.data || []);
-        renderSparklines(hrData.data || [], stepsData.data || [], (calData.data || []).concat(totalCalData.data || []), sleepData.data || []);
-        renderCharts(hrData.data || [], stepsData.data || [], distData.data || [], (calData.data || []).concat(totalCalData.data || []), sleepData.data || [], weightData.data || []);
+        document.getElementById('recordStats').textContent =
+            records.length + ' recent \u00B7 ' + typeSummary.reduce((a, s) => a + s.count, 0).toLocaleString() + ' in view';
+        document.getElementById('recordCount').textContent = records.length + ' records';
+
+        renderScores(scoreSleep.data || [], scoreSteps.data || [], scoreCal.data || [], scoreHr.data || [], today);
+        renderHypno(sleepSegs.records || [], today);
+        renderHRChart(hrData.data || []);
+        renderStepsChart(stepsData.data || [], distData.data || []);
+        renderCaloriesChart((calData.data || []).concat(totalCalData.data || []));
+        renderWeightChart(weightData.data || []);
         renderDistribution(typeSummary);
         renderRecords(records);
     } catch (err) {
@@ -246,117 +333,167 @@ async function loadDashboard() {
 
 function formatDateRange(start, end) {
     const opts = { month: 'short', day: 'numeric' };
-    const s = new Date(start + 'T00:00:00Z').toLocaleDateString('en-US', opts);
-    const e = new Date(end + 'T00:00:00Z').toLocaleDateString('en-US', opts);
-    if (s === e) return s;
+    const s = parseLocalDate(start).toLocaleDateString('en-US', opts);
+    const e = parseLocalDate(end).toLocaleDateString('en-US', opts);
+    if (s === e) {
+        const today = localISODate(new Date());
+        return (start === today ? 'Today, ' : '') + s;
+    }
     return s + ' - ' + e;
 }
 
 function formatLabel(bucket, range) {
-    if (range === 'day' || bucket.length > 10) {
-        const raw = bucket.length > 10 ? bucket + ':00:00Z' : bucket + 'T00:00:00Z';
-        const d = new Date(raw);
-        return d.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true, timeZone: 'UTC' });
+    const norm = bucket.replace('T', ' ').replace(' ', 'T');
+    if (range === 'day' || norm.length > 10) {
+        const parts = norm.split('T');
+        const ymd = parts[0].split('-').map(Number);
+        const h = parts[1] ? parseInt(parts[1].slice(0, 2), 10) : 0;
+        return new Date(ymd[0], ymd[1] - 1, ymd[2], h).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
     }
-    const d = new Date(bucket + 'T00:00:00Z');
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+    return parseLocalDate(norm).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function formatNum(val, type) {
-    const intTypes = ['HEART_RATE', 'STEPS', 'ACTIVE_ENERGY_BURNED', 'TOTAL_CALORIES_BURNED', 'BASAL_ENERGY_BURNED'];
-    if (intTypes.includes(type)) {
-        return Math.round(val).toLocaleString();
-    }
-    return (Math.round(val * 10) / 10).toString();
+function bucketMap(data, pick) {
+    const m = {};
+    (data || []).forEach(d => { m[d.bucket] = pick(d); });
+    return m;
 }
 
-function updateMetricCards(typeSummary, hrTs, stepsTs, calTs, totalCalTs, sleepTs) {
-    const hrSummary = typeSummary.find(s => s.key === 'HEART_RATE');
-    if (hrSummary) {
-        document.getElementById('hrValue').textContent = Math.round(hrSummary.avg);
-        document.getElementById('hrRange').textContent = Math.round(hrSummary.min) + ' - ' + Math.round(hrSummary.max);
-    } else {
-        document.getElementById('hrValue').textContent = '--';
-        document.getElementById('hrRange').textContent = '-- --';
-    }
+function renderScores(sleepBuckets, stepsDaily, calDaily, hrDaily, today) {
+    const nights = (sleepBuckets || []).filter(d => d.hours > 0).map(d => d.bucket).sort();
+    const past = nights.filter(b => b <= today);
+    const lastNight = past.length ? past[past.length - 1] : null;
+    const hoursByDay = bucketMap(sleepBuckets, d => d.hours);
+    const lastHours = lastNight ? hoursByDay[lastNight] : null;
+    const priorNights = past.filter(b => b < lastNight).slice(-7);
+    const priorAvg = priorNights.length
+        ? priorNights.reduce((a, b) => a + hoursByDay[b], 0) / priorNights.length
+        : null;
 
-    const stepsSummary = typeSummary.find(s => s.key === 'STEPS');
-    if (stepsSummary) {
-        document.getElementById('stepsValue').textContent = Math.round(stepsSummary.sum).toLocaleString();
-        const dayCount = new Set(stepsTs.map(d => d.bucket)).size || 1;
-        document.getElementById('stepsAvg').textContent = Math.round(stepsSummary.sum / dayCount).toLocaleString() + '/day';
-    } else {
-        document.getElementById('stepsValue').textContent = '--';
-        document.getElementById('stepsAvg').textContent = '--';
+    const stepsByDay = bucketMap(stepsDaily, d => d.sum);
+    const calByDay = bucketMap(calDaily, d => d.sum);
+    const hrByDay = bucketMap(hrDaily, d => d.avg);
+    const dayScore = (b) => strainScore(stepsByDay[b] || 0, calByDay[b] || 0);
+    const strain = dayScore(today);
+    const priorVals = [];
+    for (let i = 1; i <= 7; i++) {
+        const s = dayScore(shiftISO(-i));
+        if (s != null) priorVals.push(s);
     }
+    const priorStrain = priorVals.length ? priorVals.reduce((a, b) => a + b, 0) / priorVals.length : null;
 
-    const calSum = (typeSummary.find(s => s.key === 'ACTIVE_ENERGY_BURNED')?.sum || 0)
-        + (typeSummary.find(s => s.key === 'TOTAL_CALORIES_BURNED')?.sum || 0);
-    if (calSum > 0) {
-        document.getElementById('caloriesValue').textContent = Math.round(calSum).toLocaleString();
-        const allCalBuckets = new Set([...calTs, ...totalCalTs].map(d => d.bucket));
-        const dayCount = allCalBuckets.size || 1;
-        document.getElementById('caloriesAvg').textContent = Math.round(calSum / dayCount).toLocaleString() + '/day';
-    } else {
-        document.getElementById('caloriesValue').textContent = '--';
-        document.getElementById('caloriesAvg').textContent = '--';
-    }
+    const sleep = sleepScore(lastHours);
+    const recovery = recoveryScore(sleep, strain);
+    const sleepDelta = deltaPct(lastHours, priorAvg);
+    const strainDelta = strain != null && priorStrain != null && !isNaN(priorStrain) ? deltaPct(strain, priorStrain) : null;
 
-    const sleepHours = sleepTs.map(d => d.hours || 0);
-    if (sleepHours.length) {
-        const totalHrs = sleepHours.reduce((a, b) => a + b, 0);
-        const avgHrs = totalHrs / sleepHours.length;
-        document.getElementById('sleepValue').textContent = totalHrs.toFixed(1);
-        document.getElementById('sleepAvg').textContent = avgHrs.toFixed(1) + ' hrs/night';
-    } else {
-        document.getElementById('sleepValue').textContent = '--';
-        document.getElementById('sleepAvg').textContent = '--';
-    }
+    document.getElementById('balanceRings').innerHTML = ringsSVG(sleep, strain, recovery);
+    document.getElementById('balanceStatus').textContent = recovery == null ? 'No data yet' : bandFor(recovery);
+    document.getElementById('miniSteps').textContent = stepsByDay[today] != null ? fmtInt(stepsByDay[today]) : '--';
+    document.getElementById('miniCal').textContent = calByDay[today] != null ? fmtInt(calByDay[today]) : '--';
+    document.getElementById('miniHr').textContent = hrByDay[today] != null ? fmtInt(hrByDay[today]) : '--';
+
+    document.getElementById('sleepGauge').innerHTML =
+        gaugeSVG(sleep == null ? null : sleep / 100, COLORS.teal) + gaugeCenter(sleep, sleepDelta, COLORS.teal);
+    document.getElementById('sleepStatus').textContent = sleep == null ? 'No data' : bandFor(sleep);
+    document.getElementById('sleepInsight').textContent = sleepInsight(sleep);
+
+    document.getElementById('strainGauge').innerHTML =
+        gaugeSVG(strain == null ? null : strain / 100, COLORS.orange) + gaugeCenter(strain, strainDelta, COLORS.orange);
+    document.getElementById('strainStatus').textContent = strain == null ? 'No data' : bandFor(strain);
+    document.getElementById('strainInsight').textContent = strainInsight(strain);
 }
 
-function renderSparklines(hrTs, stepsTs, calTs, sleepTs) {
-    renderSparkline('hrSparkline', hrTs.map(d => d.avg), COLORS.red, COLORS.redDim);
-    renderSparkline('stepsSparkline', stepsTs.map(d => d.sum), COLORS.green, COLORS.greenDim);
-    renderSparkline('caloriesSparkline', calTs.map(d => d.sum), COLORS.orange, COLORS.orangeDim);
-    renderSparkline('sleepSparkline', sleepTs.map(d => d.hours), COLORS.violet, COLORS.violetDim);
+function eveningKey(dateFrom) {
+    const d = new Date(dateFrom);
+    let e = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    if (d.getHours() < 12) e = new Date(e.getTime() - 86400000);
+    return localISODate(e);
 }
 
-function renderSparkline(canvasId, data, color, fillColor) {
-    const existing = Chart.getChart(canvasId);
-    if (existing) existing.destroy();
+function renderHypno(records, today) {
+    const hypnoEl = document.getElementById('hypno');
+    const axisEl = document.getElementById('hypnoAxis');
+    const rowsEl = document.getElementById('stageRows');
+    const spanEl = document.getElementById('sleepSpan');
+    hypnoEl.innerHTML = '';
+    axisEl.innerHTML = '';
+    rowsEl.innerHTML = '';
 
-    if (!data.length) {
-        const ctx = document.getElementById(canvasId).getContext('2d');
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    const stageRecs = (records || []).filter(r => STAGE_ORDER.includes(r.type));
+    const byNight = {};
+    stageRecs.forEach(r => {
+        const k = eveningKey(r.date_from);
+        (byNight[k] = byNight[k] || []).push(r);
+    });
+    const nights = Object.keys(byNight).sort();
+    const past = nights.filter(k => k <= today);
+    if (!past.length) {
+        hypnoEl.innerHTML = '<div class="empty-note">No sleep recorded in this window.</div>';
+        spanEl.textContent = '';
         return;
     }
+    const evening = past[past.length - 1];
+    const segs = byNight[evening]
+        .map(r => ({ start: new Date(r.date_from).getTime(), end: new Date(r.date_to).getTime(), stage: r.type }))
+        .filter(s => s.end > s.start)
+        .sort((a, b) => a.start - b.start);
+    if (!segs.length) {
+        hypnoEl.innerHTML = '<div class="empty-note">No sleep recorded in this window.</div>';
+        return;
+    }
+    const t0 = Math.min.apply(null, segs.map(s => s.start));
+    const t1 = Math.max.apply(null, segs.map(s => s.end));
+    const total = Math.max(1, t1 - t0);
+    spanEl.textContent = parseLocalDate(evening).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' night';
 
-    new Chart(document.getElementById(canvasId), {
-        type: 'line',
-        data: {
-            labels: data.map((_, i) => i),
-            datasets: [{
-                data,
-                borderColor: color,
-                borderWidth: 1.5,
-                fill: true,
-                backgroundColor: fillColor,
-                tension: 0.4,
-                pointRadius: 0,
-                pointHoverRadius: 0,
-            }],
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: { duration: 400 },
-            plugins: { legend: { display: false }, tooltip: { enabled: false } },
-            scales: {
-                x: { display: false },
-                y: { display: false },
-            },
-            elements: { line: { borderCapStyle: 'round' } },
-        },
+    const present = STAGE_ORDER.filter(st => segs.some(s => s.stage === st));
+    present.forEach(st => {
+        const row = document.createElement('div');
+        row.className = 'hypno-band';
+        let cursor = t0;
+        segs.filter(s => s.stage === st).forEach(s => {
+            if (s.start > cursor) {
+                const gap = document.createElement('div');
+                gap.className = 'hypno-gap';
+                gap.style.flexGrow = ((s.start - cursor) / total * 1000).toFixed(1);
+                row.appendChild(gap);
+            }
+            const block = document.createElement('div');
+            block.className = 'hypno-block';
+            block.style.flexGrow = (Math.max(1, (s.end - s.start)) / total * 1000).toFixed(1);
+            block.style.background = TYPE_COLORS[st] || COLORS.peri;
+            block.title = (TYPE_LABELS[st] || st) + ' ' + fmtDur((s.end - s.start) / 1000);
+            row.appendChild(block);
+            cursor = s.end;
+        });
+        if (cursor < t1) {
+            const gap = document.createElement('div');
+            gap.className = 'hypno-gap';
+            gap.style.flexGrow = ((t1 - cursor) / total * 1000).toFixed(1);
+            row.appendChild(gap);
+        }
+        hypnoEl.appendChild(row);
+    });
+
+    for (let i = 0; i <= 4; i++) {
+        const sp = document.createElement('span');
+        sp.textContent = new Date(t0 + total * i / 4).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).toLowerCase();
+        axisEl.appendChild(sp);
+    }
+
+    const totals = {};
+    segs.forEach(s => { totals[s.stage] = (totals[s.stage] || 0) + (s.end - s.start) / 1000; });
+    const grand = Object.keys(totals).reduce((a, k) => a + totals[k], 0) || 1;
+    present.forEach(st => {
+        const secs = totals[st];
+        const pct = Math.round(secs / grand * 100);
+        const row = document.createElement('div');
+        row.className = 'stage-row';
+        row.innerHTML = '<div class="stage-top"><span class="stage-name">' + (TYPE_LABELS[st] || st) + ' &nbsp;' + pct + '%</span>'
+            + '<span class="stage-dur">' + fmtDur(secs) + '</span></div>'
+            + '<div class="stage-bar"><div class="stage-fill" style="width:' + pct + '%;background:' + (TYPE_COLORS[st] || COLORS.peri) + '"></div></div>';
+        rowsEl.appendChild(row);
     });
 }
 
@@ -368,25 +505,17 @@ function clearChart(id) {
     }
 }
 
-function renderCharts(hrTs, stepsTs, distTs, calTs, sleepTs, weightTs) {
-    renderHRChart(hrTs);
-    renderStepsChart(stepsTs, distTs);
-    renderCaloriesChart(calTs);
-    renderSleepChart(sleepTs);
-    renderWeightChart(weightTs);
+function withLegend(defs) {
+    const d = chartDefaults();
+    d.plugins.legend = { display: true, position: 'top', align: 'end', labels: legendLabels() };
+    return d;
 }
 
 function renderHRChart(data) {
     const id = 'hrChart';
     if (charts[id]) charts[id].destroy();
-
     if (!data.length) { clearChart(id); return; }
-
     const labels = data.map(d => formatLabel(d.bucket, currentRange));
-    const avgData = data.map(d => Math.round(d.avg));
-    const minData = data.map(d => Math.round(d.min));
-    const maxData = data.map(d => Math.round(d.max));
-
     charts[id] = new Chart(document.getElementById(id), {
         type: 'line',
         data: {
@@ -394,19 +523,19 @@ function renderHRChart(data) {
             datasets: [
                 {
                     label: 'Avg',
-                    data: avgData,
-                    borderColor: COLORS.red,
+                    data: data.map(d => Math.round(d.avg)),
+                    borderColor: COLORS.orange,
                     borderWidth: 2,
                     fill: '+1',
-                    backgroundColor: COLORS.redDim,
+                    backgroundColor: COLORS.orangeDim,
                     tension: 0.35,
                     pointRadius: data.length > 20 ? 0 : 3,
                     pointHoverRadius: 5,
-                    pointBackgroundColor: COLORS.red,
+                    pointBackgroundColor: COLORS.orange,
                 },
                 {
                     label: 'Min',
-                    data: minData,
+                    data: data.map(d => Math.round(d.min)),
                     borderColor: 'transparent',
                     borderWidth: 0,
                     fill: false,
@@ -415,59 +544,39 @@ function renderHRChart(data) {
                 },
                 {
                     label: 'Max',
-                    data: maxData,
+                    data: data.map(d => Math.round(d.max)),
                     borderColor: 'transparent',
                     borderWidth: 0,
                     fill: '-1',
-                    backgroundColor: COLORS.redDim,
+                    backgroundColor: COLORS.orangeDim,
                     tension: 0.35,
                     pointRadius: 0,
                 },
             ],
         },
-        options: {
-            ...chartDefaults(),
-            plugins: {
-                ...chartDefaults().plugins,
-                legend: {
-                    display: true,
-                    position: 'top',
-                    align: 'end',
-                    labels: {
-                        color: getChartColors().text,
-                        font: { family: "'Space Grotesk'", size: 11 },
-                        boxWidth: 12,
-                        boxHeight: 2,
-                        padding: 16,
-                        usePointStyle: false,
-                    },
-                },
-            },
-        },
+        options: withLegend(),
     });
 }
 
 function renderStepsChart(stepsTs, distTs) {
     const id = 'stepsChart';
     if (charts[id]) charts[id].destroy();
-
-    const allBuckets = [...new Set([...stepsTs.map(d => d.bucket), ...distTs.map(d => d.bucket)])].sort();
+    const allBuckets = Array.from(new Set(stepsTs.concat(distTs).map(d => d.bucket))).sort();
     if (!allBuckets.length) { clearChart(id); return; }
-
-    const labels = allBuckets.map(b => formatLabel(b, currentRange));
-    const stepsByBucket = Object.fromEntries(stepsTs.map(d => [d.bucket, d.sum]));
-    const distByBucket = Object.fromEntries(distTs.map(d => [d.bucket, d.sum]));
-
+    const stepsByBucket = {};
+    stepsTs.forEach(d => { stepsByBucket[d.bucket] = d.sum; });
+    const distByBucket = {};
+    distTs.forEach(d => { distByBucket[d.bucket] = Math.round(d.sum * 10) / 10; });
     charts[id] = new Chart(document.getElementById(id), {
         type: 'bar',
         data: {
-            labels,
+            labels: allBuckets.map(b => formatLabel(b, currentRange)),
             datasets: [
                 {
                     label: 'Steps',
                     data: allBuckets.map(b => Math.round(stepsByBucket[b] || 0)),
-                    backgroundColor: COLORS.greenDim,
-                    borderColor: COLORS.green,
+                    backgroundColor: COLORS.tealDim,
+                    borderColor: COLORS.teal,
                     borderWidth: 1,
                     borderRadius: 4,
                     yAxisID: 'y',
@@ -475,11 +584,11 @@ function renderStepsChart(stepsTs, distTs) {
                 },
                 {
                     label: 'Distance',
-                    data: allBuckets.map(b => Math.round((distByBucket[b] || 0) * 10) / 10),
+                    data: allBuckets.map(b => distByBucket[b] || 0),
                     type: 'line',
-                    borderColor: COLORS.blue,
+                    borderColor: COLORS.ringBlue,
                     borderWidth: 2,
-                    pointBackgroundColor: COLORS.blue,
+                    pointBackgroundColor: COLORS.ringBlue,
                     pointRadius: 3,
                     tension: 0.35,
                     fill: false,
@@ -488,51 +597,27 @@ function renderStepsChart(stepsTs, distTs) {
                 },
             ],
         },
-        options: {
-            ...chartDefaults(),
-            plugins: {
-                ...chartDefaults().plugins,
-                legend: {
-                    display: true,
-                    position: 'top',
-                    align: 'end',
-                    labels: {
-                        color: getChartColors().text,
-                        font: { family: "'Space Grotesk'", size: 11 },
-                        boxWidth: 12,
-                        boxHeight: 2,
-                        padding: 16,
-                    },
-                },
-            },
-            scales: {
-                ...chartDefaults().scales,
-                y: {
-                    ...chartDefaults().scales.y,
-                    position: 'left',
-                },
-                y1: {
-                    ...chartDefaults().scales.y,
-                    position: 'right',
-                    grid: { display: false, drawBorder: false },
-                },
-            },
-        },
+        options: (function() {
+            const o = withLegend();
+            o.scales.y1 = {
+                position: 'right',
+                ticks: { color: '#7A7A84', font: { family: "'JetBrains Mono'", size: 10 }, maxTicksLimit: 5 },
+                grid: { display: false, drawBorder: false },
+                border: { display: false },
+            };
+            return o;
+        })(),
     });
 }
 
 function renderCaloriesChart(data) {
     const id = 'caloriesChart';
     if (charts[id]) charts[id].destroy();
-
     if (!data.length) { clearChart(id); return; }
-
-    const labels = data.map(d => formatLabel(d.bucket, currentRange));
-
     charts[id] = new Chart(document.getElementById(id), {
         type: 'bar',
         data: {
-            labels,
+            labels: data.map(d => formatLabel(d.bucket, currentRange)),
             datasets: [{
                 label: 'Calories',
                 data: data.map(d => Math.round(d.sum)),
@@ -546,64 +631,25 @@ function renderCaloriesChart(data) {
     });
 }
 
-function renderSleepChart(data) {
-    const id = 'sleepChart';
-    if (charts[id]) charts[id].destroy();
-
-    if (!data.length) { clearChart(id); return; }
-
-    const labels = data.map(d => formatLabel(d.bucket, currentRange));
-    const hours = data.map(d => d.hours);
-
-    charts[id] = new Chart(document.getElementById(id), {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                label: 'Hours',
-                data: hours,
-                backgroundColor: COLORS.violetDim,
-                borderColor: COLORS.violet,
-                borderWidth: 1,
-                borderRadius: 4,
-            }],
-        },
-        options: {
-            ...chartDefaults(),
-            scales: {
-                ...chartDefaults().scales,
-                y: {
-                    ...chartDefaults().scales.y,
-                    title: { display: true, text: 'Hours', color: getChartColors().text, font: { size: 10 } },
-                },
-            },
-        },
-    });
-}
-
 function renderWeightChart(data) {
     const id = 'weightChart';
     if (charts[id]) charts[id].destroy();
-
     if (!data.length) { clearChart(id); return; }
-
-    const labels = data.map(d => formatLabel(d.bucket, currentRange));
-
     charts[id] = new Chart(document.getElementById(id), {
         type: 'line',
         data: {
-            labels,
+            labels: data.map(d => formatLabel(d.bucket, currentRange)),
             datasets: [{
                 label: 'Weight',
-                data: data.map(d => +d.avg.toFixed(1)),
-                borderColor: COLORS.blue,
+                data: data.map(d => Math.round(d.avg * 10) / 10),
+                borderColor: COLORS.teal,
                 borderWidth: 2,
                 fill: true,
-                backgroundColor: COLORS.blueDim,
+                backgroundColor: COLORS.tealDim,
                 tension: 0.35,
                 pointRadius: data.length > 15 ? 0 : 4,
                 pointHoverRadius: 5,
-                pointBackgroundColor: COLORS.blue,
+                pointBackgroundColor: COLORS.teal,
             }],
         },
         options: chartDefaults(),
@@ -613,22 +659,16 @@ function renderWeightChart(data) {
 function renderDistribution(typeSummary) {
     const id = 'distributionChart';
     if (charts[id]) charts[id].destroy();
-
     if (!typeSummary.length) { clearChart(id); return; }
-
-    const sorted = [...typeSummary].sort((a, b) => b.count - a.count);
-    const labels = sorted.map(s => TYPE_LABELS[s.key] || s.key);
-    const colors = sorted.map(s => TYPE_COLORS[s.key] || '#6B7280');
-    const borderColors = colors.map(c => c.replace(/[\d.]+\)$/, '1)'));
-
+    const sorted = typeSummary.slice().sort((a, b) => b.count - a.count);
     charts[id] = new Chart(document.getElementById(id), {
         type: 'doughnut',
         data: {
-            labels,
+            labels: sorted.map(s => TYPE_LABELS[s.key] || s.key),
             datasets: [{
                 data: sorted.map(s => s.count),
-                backgroundColor: colors.map(c => c.includes('rgba') ? c : c + '33'),
-                borderColor: colors,
+                backgroundColor: sorted.map(s => (TYPE_COLORS[s.key] || '#7A7A84') + '55'),
+                borderColor: sorted.map(s => TYPE_COLORS[s.key] || '#7A7A84'),
                 borderWidth: 2,
                 hoverOffset: 6,
             }],
@@ -639,65 +679,61 @@ function renderDistribution(typeSummary) {
             cutout: '65%',
             animation: { duration: 600, easing: 'easeOutQuart' },
             plugins: {
-                legend: {
-                    display: true,
-                    position: 'bottom',
-                    labels: {
-                        color: getChartColors().text,
-                        font: { family: "'Space Grotesk'", size: 11 },
-                        padding: 12,
-                        boxWidth: 12,
-                        boxHeight: 12,
-                        usePointStyle: true,
-                        pointStyle: 'circle',
-                    },
-                },
-                tooltip: {
-                    ...chartDefaults().plugins.tooltip,
+                legend: { display: true, position: 'bottom', labels: legendLabels() },
+                tooltip: Object.assign({}, chartDefaults().plugins.tooltip, {
                     callbacks: {
                         label: function(ctx) {
-                            const val = ctx.parsed;
-                            const rounded = Math.round(val * 10) / 10;
-                            return ctx.label + ': ' + rounded.toLocaleString();
+                            return ctx.label + ': ' + Math.round(ctx.parsed).toLocaleString();
                         }
                     }
-                },
+                }),
             },
         },
     });
 }
 
+function sleepDisplay(r) {
+    const secs = (new Date(r.date_to) - new Date(r.date_from)) / 1000;
+    if (!isFinite(secs) || secs <= 0) return '--';
+    return fmt1(secs / 3600);
+}
+
 function renderRecords(records) {
     const list = document.getElementById('recordsList');
-    const countEl = document.getElementById('recordCount');
-    countEl.textContent = records.length + ' records';
-
+    const dots = {
+        HEART_RATE: COLORS.orange,
+        STEPS: COLORS.teal,
+        DISTANCE_DELTA: COLORS.ringBlue,
+        ACTIVE_ENERGY_BURNED: COLORS.orange,
+        TOTAL_CALORIES_BURNED: COLORS.orange,
+        BASAL_ENERGY_BURNED: COLORS.orange,
+        WEIGHT: COLORS.teal,
+    };
     if (!records.length) {
-        list.innerHTML = '<div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg><p>No data yet</p><span>Sync from your phone to see records here</span></div>';
+        list.innerHTML = '<div class="empty-note">No records in this window.<br>Sync from your phone to see data here.</div>';
         return;
     }
-
     list.innerHTML = records.map(r => {
-        const dotClass = TYPE_DOT_CLASS[r.type] || 'default';
         const label = TYPE_LABELS[r.type] || r.type.replace(/_/g, ' ');
         const time = new Date(r.date_from).toLocaleString('en-US', {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
         });
+        const isSleep = SLEEP_TYPES.includes(r.type);
+        const isInt = ['HEART_RATE', 'STEPS', 'ACTIVE_ENERGY_BURNED', 'TOTAL_CALORIES_BURNED', 'BASAL_ENERGY_BURNED'].includes(r.type);
         const val = parseFloat(r.value);
-        const displayVal = formatNum(val, r.type);
-        return '<div class="record-item">' +
-            '<div class="record-left">' +
-                '<div class="record-dot ' + dotClass + '"></div>' +
-                '<div class="record-info">' +
-                    '<span class="record-type">' + label + '</span>' +
-                    '<span class="record-time">' + time + '</span>' +
-                '</div>' +
-            '</div>' +
-            '<div class="record-right">' +
-                '<span class="record-val">' + displayVal + '</span>' +
-                '<span class="record-unit">' + (r.unit || '') + '</span>' +
-            '</div>' +
-        '</div>';
+        const displayVal = isSleep ? sleepDisplay(r) : (isInt ? fmtInt(val) : fmt1(val));
+        let unit = r.unit || '';
+        if (isSleep) unit = 'h';
+        else if (r.type === 'DISTANCE_DELTA' && !unit) unit = 'm';
+        return '<div class="record-item">'
+            + '<div class="record-left">'
+            + '<div class="record-dot" style="background:' + (dots[r.type] || COLORS.peri) + '"></div>'
+            + '<div><div class="record-type">' + label + '</div>'
+            + '<div class="record-time">' + time + '</div></div>'
+            + '</div>'
+            + '<div><span class="record-val">' + displayVal + '</span>'
+            + '<span class="record-unit">' + unit + '</span></div>'
+            + '</div>';
     }).join('');
 }
 
